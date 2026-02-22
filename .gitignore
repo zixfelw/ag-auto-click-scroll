@@ -1,0 +1,4 @@
+node_modules/
+*.vsix
+_temp_*/
+fix*.ps1

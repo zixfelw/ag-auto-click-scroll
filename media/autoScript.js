@@ -1,0 +1,162 @@
+(function () {
+    // --- Dọn dẹp bản cũ ---
+    if (window._agToolIntervals) {
+        window._agToolIntervals.forEach(clearInterval);
+        window.removeEventListener('scroll', window._agScrollListener, true);
+    }
+    window._agToolIntervals = [];
+
+    var PAUSE_SCROLL_MS = /*{{PAUSE_SCROLL_MS}}*/7000;
+    var CLICK_INTERVAL_MS = /*{{CLICK_INTERVAL_MS}}*/1000;
+    var SCROLL_INTERVAL_MS = /*{{SCROLL_INTERVAL_MS}}*/500;
+    var CLICK_PATTERNS = /*{{CLICK_PATTERNS}}*/["Allow", "Always Allow", "Run", "Keep Waiting", "Accept all"];
+    const ENABLED = /*{{ENABLED}}*/true;
+
+    if (!ENABLED) return;
+
+    // --- Dynamic config reload ---
+    var _agConfigUrl = null;
+    try {
+        var scripts = document.querySelectorAll('script[src*="ag-auto"]');
+        if (scripts.length > 0) {
+            _agConfigUrl = scripts[0].src.replace(/ag-auto-script\.js.*/, 'ag-auto-config.json');
+        }
+    } catch (e) { }
+    if (!_agConfigUrl) _agConfigUrl = 'ag-auto-config.json';
+
+    var _agConfigReload = setInterval(function () {
+        try {
+            fetch(_agConfigUrl + '?t=' + Date.now()).then(function (r) {
+                if (r.ok) return r.json(); return null;
+            }).then(function (cfg) {
+                if (cfg) {
+                    if (cfg.clickPatterns && Array.isArray(cfg.clickPatterns)) CLICK_PATTERNS = cfg.clickPatterns;
+                    if (cfg.pauseScrollMs) PAUSE_SCROLL_MS = cfg.pauseScrollMs;
+                    if (cfg.scrollIntervalMs) SCROLL_INTERVAL_MS = cfg.scrollIntervalMs;
+                    if (cfg.clickIntervalMs) CLICK_INTERVAL_MS = cfg.clickIntervalMs;
+                }
+            }).catch(function () { });
+        } catch (e) { }
+    }, 5000);
+    window._agToolIntervals.push(_agConfigReload);
+
+    let lastManualScrollTime = 0;
+    let isAutoScrolling = false;
+
+    // =================================================================
+    // CORE FIX: Only click APPROVAL buttons (NOT random UI buttons)
+    //
+    // Approval buttons are identified by:
+    // 1. Must match a pattern (Run, Allow, etc.)  
+    // 2. Must have a SIBLING rejection button nearby (Reject, Deny, Cancel, etc.)
+    //    This guarantees it's part of an approval dialog, not random UI
+    // 3. Must be VISIBLE
+    // =================================================================
+    var REJECT_WORDS = ['Reject', 'Deny', 'Cancel', 'Dismiss', 'Don\'t Allow', 'Decline'];
+
+    function isApprovalButton(btn) {
+        // Get the parent container of this button
+        var parent = btn.parentElement;
+        if (!parent) return false;
+
+        // Search up to 3 levels up for sibling rejection elements
+        for (var level = 0; level < 3; level++) {
+            if (!parent) break;
+            var siblingBtns = parent.querySelectorAll('button, a.action-label, [role="button"], .monaco-button, span.bg-ide-button-background');
+            for (var i = 0; i < siblingBtns.length; i++) {
+                var sib = siblingBtns[i];
+                if (sib === btn) continue;
+                var sibText = (sib.innerText || '').trim();
+                // Check if sibling is a rejection button
+                for (var j = 0; j < REJECT_WORDS.length; j++) {
+                    if (sibText === REJECT_WORDS[j] || sibText.startsWith(REJECT_WORDS[j])) {
+                        return true; // Has a reject sibling = real approval dialog!
+                    }
+                }
+            }
+            parent = parent.parentElement;
+        }
+        return false;
+    }
+
+    // Track clicked buttons to avoid double-click
+    var _clicked = new WeakSet();
+
+    // --- 1. AUTO CLICK (only approval buttons with reject sibling) ---
+    let autoClick = setInterval(() => {
+        let buttons = Array.from(document.querySelectorAll('button'));
+        // Search buttons, action-links, AND clickable spans (Accept all is a <span> with Tailwind classes)
+        let clickables = Array.from(document.querySelectorAll('button, a.action-label, [role="button"], .monaco-button'));
+        // Also find clickable spans (cursor-pointer = clickable)
+        document.querySelectorAll('span.cursor-pointer').forEach(s => clickables.push(s));
+        let targetBtn = clickables.find(b => {
+            if (b.offsetParent === null) return false;     // hidden
+            if (_clicked.has(b)) return false;              // already clicked
+
+            let text = (b.innerText || b.textContent || '').trim();
+            if (!text || text.length > 40) return false;    // empty or too long
+
+            // Must match a pattern
+            let matchesPattern = CLICK_PATTERNS.some(p =>
+                text === p || text.startsWith(p)
+            );
+            if (!matchesPattern) return false;
+
+            // Clickable spans (cursor-pointer) are action buttons, skip pair check
+            if (b.tagName === 'SPAN' && b.classList.contains('cursor-pointer')) return true;
+
+            // For regular buttons: must be an approval button (has reject sibling)
+            return isApprovalButton(b);
+        });
+
+        if (targetBtn) {
+            console.log("[AG Auto] 🎯 Approval-Click: [" + targetBtn.innerText.trim() + "]");
+            _clicked.add(targetBtn);
+            targetBtn.click();
+        }
+    }, CLICK_INTERVAL_MS);
+    window._agToolIntervals.push(autoClick);
+
+    // --- 2. THEO DÕI CUỘN TAY ---
+    window._agScrollListener = function (e) {
+        if (!isAutoScrolling && e.isTrusted) {
+            let el = e.target;
+            if (el && el.nodeType === 1) {
+                if (!el.closest('.monaco-editor') && !el.closest('.part.editor')) {
+                    lastManualScrollTime = Date.now();
+                }
+            }
+        }
+    };
+    window.addEventListener('scroll', window._agScrollListener, true);
+
+    // --- 3. AUTO SCROLL ---
+    let autoScroll = setInterval(() => {
+        let now = Date.now();
+        if (now - lastManualScrollTime < PAUSE_SCROLL_MS) return;
+
+        let scrollables = Array.from(document.querySelectorAll('*')).filter(el => {
+            let style = window.getComputedStyle(el);
+            let hasScrollbar = el.scrollHeight > el.clientHeight &&
+                (style.overflowY === 'auto' || style.overflowY === 'scroll');
+            if (!hasScrollbar) return false;
+            if (el.closest('.monaco-editor') || el.closest('.part.editor')) return false;
+            if (el.tagName === 'TEXTAREA') return false;
+            return true;
+        });
+
+        if (scrollables.length > 0) {
+            isAutoScrolling = true;
+            scrollables.forEach(el => {
+                if (el.scrollHeight - el.scrollTop - el.clientHeight > 5) {
+                    el.scrollTop = el.scrollHeight;
+                }
+            });
+            setTimeout(() => { isAutoScrolling = false; }, 50);
+        }
+
+    }, SCROLL_INTERVAL_MS);
+    window._agToolIntervals.push(autoScroll);
+
+    console.log("[AG Auto] 🚀 v3.6.0 | Only clicking APPROVAL buttons (with Reject sibling) | Patterns:", JSON.stringify(CLICK_PATTERNS));
+})();

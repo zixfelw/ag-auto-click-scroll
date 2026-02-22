@@ -1,0 +1,5 @@
+.vscode/**
+.gitignore
+node_modules/**
+*.ps1
+src/_*

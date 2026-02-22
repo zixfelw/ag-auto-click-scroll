@@ -1,0 +1,93 @@
+{
+    "name": "ag-auto-click-scroll",
+    "displayName": "AG Auto Click & Scroll",
+    "description": "Tự động nhấn nút Run/Allow và cuộn khung chat Antigravity. Có giao diện cài đặt trực quan.",
+    "version": "4.0.0",
+    "publisher": "zixfel",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/zixfelw/ag-auto-click-scroll"
+    },
+    "engines": {
+        "vscode": "^1.60.0"
+    },
+    "categories": [
+        "Other"
+    ],
+    "activationEvents": [
+        "onStartupFinished"
+    ],
+    "main": "./src/extension.js",
+    "contributes": {
+        "commands": [
+            {
+                "command": "ag-auto.enable",
+                "title": "AG Auto: Enable (Inject Script)"
+            },
+            {
+                "command": "ag-auto.disable",
+                "title": "AG Auto: Disable (Remove Script)"
+            },
+            {
+                "command": "ag-auto.openSettings",
+                "title": "AG Auto: Open Settings"
+            }
+        ],
+        "configuration": {
+            "title": "AG Auto Click & Scroll",
+            "properties": {
+                "ag-auto.enabled": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Bật/tắt Auto Click & Scroll"
+                },
+                "ag-auto.language": {
+                    "type": "string",
+                    "enum": [
+                        "vi",
+                        "en",
+                        "zh"
+                    ],
+                    "enumDescriptions": [
+                        "Tiếng Việt",
+                        "English",
+                        "中文"
+                    ],
+                    "default": "vi",
+                    "description": "Ngôn ngữ hiển thị trong giao diện Settings"
+                },
+                "ag-auto.scrollPauseMs": {
+                    "type": "number",
+                    "default": 7000,
+                    "description": "Thời gian nghỉ khi người dùng cuộn tay (ms)"
+                },
+                "ag-auto.scrollIntervalMs": {
+                    "type": "number",
+                    "default": 500,
+                    "description": "Tốc độ quét cuộn tự động (ms)"
+                },
+                "ag-auto.clickIntervalMs": {
+                    "type": "number",
+                    "default": 1000,
+                    "description": "Tốc độ quét nút click (ms)"
+                },
+                "ag-auto.clickPatterns": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "default": [
+                        "Allow",
+                        "Always Allow",
+                        "Run",
+                        "Keep Waiting"
+                    ],
+                    "description": "Danh sách text nút tự động click"
+                }
+            }
+        }
+    },
+    "scripts": {
+        "vscode:prepublish": "echo ok"
+    }
+}
