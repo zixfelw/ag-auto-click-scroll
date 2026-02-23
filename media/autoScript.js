@@ -1,4 +1,8 @@
 (function () {
+    // --- Guard: prevent double execution (workbench.js + HTML script tag) ---
+    if (window._agAutoLoaded) return;
+    window._agAutoLoaded = true;
+
     // --- Dọn dẹp bản cũ ---
     if (window._agToolIntervals) {
         window._agToolIntervals.forEach(clearInterval);
