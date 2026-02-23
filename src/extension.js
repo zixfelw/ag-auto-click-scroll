@@ -848,13 +848,55 @@ function startAutoAcceptLoop(context) {
 // EXTENSION ACTIVATION
 // =============================================================
 function activate(context) {
-    console.log('[AG Auto] Extension đang khởi động (v4.16.0)...');
+    console.log('[AG Auto] Extension đang khởi động (v4.18.0)...');
 
-    // ---- GỠ script cũ khỏi workbench (nếu có) ----
-    try {
-        uninstallScript();
-        console.log('[AG Auto] Đã gỡ script injection cũ khỏi workbench');
-    } catch (e) { }
+    // ---- Auto-cleanup: gỡ script cũ khỏi workbench + auto-reload ----
+    const JS_MARKER = 'AG-AUTO-CLICK-SCROLL-JS-START';
+    const HTML_MARKER = 'AG-AUTO-CLICK-SCROLL-START';
+    const CLEAN_KEY = 'ag-auto-cleaned-v4.18';
+
+    const alreadyCleaned = context.globalState.get(CLEAN_KEY, false);
+
+    if (!alreadyCleaned) {
+        try {
+            const wbPath = getWorkbenchPath();
+            if (wbPath) {
+                const wbDir = path.dirname(wbPath);
+                let hasOldInjection = false;
+
+                // Check HTML
+                const html = fs.readFileSync(wbPath, 'utf8');
+                if (html.includes(HTML_MARKER)) hasOldInjection = true;
+
+                // Check JS files
+                const jsFiles = ['workbench.desktop.main.js', 'workbench.js'];
+                for (const name of jsFiles) {
+                    const p = path.join(wbDir, name);
+                    if (fs.existsSync(p)) {
+                        const content = fs.readFileSync(p, 'utf8');
+                        if (content.includes(JS_MARKER)) hasOldInjection = true;
+                    }
+                }
+
+                if (hasOldInjection) {
+                    console.log('[AG Auto] ⚠️ Old injection found! Cleaning + auto-reload...');
+                    uninstallScript();
+                    context.globalState.update(CLEAN_KEY, true);
+                    setTimeout(() => {
+                        vscode.commands.executeCommand('workbench.action.reloadWindow');
+                    }, 500);
+                    return; // Stop activation, reload will restart
+                } else {
+                    console.log('[AG Auto] ✅ Workbench clean, no old injection');
+                    context.globalState.update(CLEAN_KEY, true);
+                }
+            }
+        } catch (e) {
+            console.log('[AG Auto] Cleanup check error:', e.message);
+        }
+    } else {
+        console.log('[AG Auto] ✅ Already cleaned, skipping check');
+    }
 
     // ---- Auto-Accept via Commands API (instant ON/OFF, like pesosz) ----
     startAutoAcceptLoop(context);
