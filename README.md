@@ -27,10 +27,6 @@ Thiết kế thông minh — chỉ click **nút approval** (có nút Reject bên
 - **Enable Auto Scroll** — toggle riêng cho scroll, instant
 - Không cần nhấn Save & Apply cho việc bật/tắt
 
-### 📡 HTTP IPC Architecture
-- Extension Host chạy HTTP micro-server trên `127.0.0.1:48787`
-- Injected script poll mỗi 2 giây để nhận trạng thái mới nhất
-- Mọi settings (patterns, timing, scroll) đều sync live qua HTTP
 
 ### 🔀 Tắt/Bật từng tính năng riêng
 - **Accept** và **Scroll** có toggle riêng biệt
@@ -85,25 +81,6 @@ Mặc định **OFF**: `Run` · `Accept all` (bật thủ công khi cần)
 `Ctrl+Shift+P` → `AG Auto: Disable` → **Reload Window**
 
 ---
-
-## ⚡ Kiến trúc v5.0
-
-```
-┌─ Extension Host ─────────────────────────────┐
-│  HTTP Server (127.0.0.1:48787)                │
-│  ├─ GET /ag-status                            │
-│  │   → { enabled, scrollEnabled,              │
-│  │       clickPatterns, pauseScrollMs,         │
-│  │       scrollIntervalMs, clickIntervalMs }   │
-│  └─ Toggle commands → instant state change    │
-└───────────────────────────────────────────────┘
-         ↕ HTTP Poll (2s)
-┌─ Workbench (Injected Script) ────────────────┐
-│  Auto Click: scan buttons → match patterns   │
-│  Auto Scroll: scroll chat → pause on manual  │
-│  Live config: update patterns + timing live   │
-└───────────────────────────────────────────────┘
-```
 
 > 🛡 **Safe Click**: Script chỉ click nút nằm trong approval dialog (có nút Reject/Deny/Cancel bên cạnh). Không bao giờ click nhầm nút navigation, sidebar, hay dialog tạo conversation mới.
 
