@@ -451,7 +451,7 @@ function getSettingsHtml(cfg) {
     body {
         font-family: 'Segoe UI', system-ui, sans-serif;
         background: #1e1e2e;
-        color: #cdd6f4;
+        color: #e8ecf4;
         padding: 24px;
         line-height: 1.6;
     }
@@ -462,7 +462,7 @@ function getSettingsHtml(cfg) {
         -webkit-text-fill-color: transparent;
         margin-bottom: 8px;
     }
-    .subtitle { color: #6c7086; margin-bottom: 24px; font-size: 0.9em; }
+    .subtitle { color: #9098b0; margin-bottom: 24px; font-size: 0.9em; }
     .card {
         background: #313244;
         border-radius: 12px;
@@ -488,7 +488,7 @@ function getSettingsHtml(cfg) {
         margin-bottom: 12px;
     }
     .field:last-child { margin-bottom: 0; }
-    label { color: #bac2de; font-size: 0.95em; }
+    label { color: #d4daf0; font-size: 0.95em; }
     input[type="number"], select {
         width: 140px;
         padding: 8px 12px;
@@ -610,7 +610,7 @@ function getSettingsHtml(cfg) {
         margin-top: 24px;
         gap: 12px;
     }
-    .hint { color: #a6adc8; font-size: 0.95em; display: block; margin-top: 6px; font-style: italic; opacity: 0.8; }
+    .hint { color: #b8c0d8; font-size: 0.95em; display: block; margin-top: 6px; font-style: italic; opacity: 0.9; }
 </style>
 </head>
 <body>
@@ -679,8 +679,8 @@ function getSettingsHtml(cfg) {
     </div>
 
     <div class="actions">
+        <button class="btn" style="background:#45475a;color:#e8ecf4;" onclick="vscode.postMessage({command:'reload'})">🔄 Reload</button>
         <button class="btn btn-primary" onclick="saveSettings()">${strings.btnSave}</button>
-        <button class="btn" style="background:#45475a;color:#cdd6f4;" onclick="vscode.postMessage({command:'reload'})">🔄 Reload</button>
     </div>
 
 <script>
@@ -801,9 +801,9 @@ function createStatusBarItem(context) {
 }
 
 function updateStatusBarItem() {
-    const config = vscode.workspace.getConfiguration('ag-auto');
-    const acceptOn = config.get('enabled', true);
-    const scrollOn = config.get('scrollEnabled', true);
+    // Use in-memory vars (instant) instead of config (may lag)
+    const acceptOn = _autoAcceptEnabled;
+    const scrollOn = _httpScrollEnabled;
 
     // Accept item
     statusBarItem.text = acceptOn ? '$(check) Accept ON' : '$(circle-slash) Accept OFF';
