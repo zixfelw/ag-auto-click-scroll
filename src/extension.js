@@ -785,13 +785,13 @@ let statusBarItem;
 let statusBarScroll;
 
 function createStatusBarItem(context) {
-    // Accept item (right side, priority 101 = more left)
-    statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 101);
+    // Accept item (far right, higher priority = more left)
+    statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, -10000);
     statusBarItem.command = 'ag-auto.openSettings';
     context.subscriptions.push(statusBarItem);
 
-    // Scroll item (right side, priority 100 = more right)
-    statusBarScroll = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+    // Scroll item (far right, next to Accept)
+    statusBarScroll = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, -10001);
     statusBarScroll.command = 'ag-auto.openSettings';
     context.subscriptions.push(statusBarScroll);
 
