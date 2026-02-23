@@ -109,6 +109,26 @@ function writeConfigJson(context) {
 
 
 /**
+ * Kiểm tra xem script đã được inject chưa
+ */
+function isAlreadyInjected() {
+    try {
+        const wbPath = getWorkbenchPath();
+        if (!wbPath) return false;
+        const wbDir = path.dirname(wbPath);
+        // Check workbench.js for our marker
+        const jsFiles = fs.readdirSync(wbDir).filter(f => f.endsWith('.js'));
+        for (const jsFile of jsFiles) {
+            const content = fs.readFileSync(path.join(wbDir, jsFile), 'utf8');
+            if (content.includes('AG-AUTO-CLICK-SCROLL-JS-START')) return true;
+        }
+        return false;
+    } catch (e) {
+        return false;
+    }
+}
+
+/**
  * Inject script vào workbench — thử nhiều cách để tương thích mọi phiên bản
  */
 function installScript(context) {
@@ -314,7 +334,18 @@ function openSettingsPanel(context) {
             writeConfigJson(context);
 
             if (msg.data.enabled) {
-                // Bật: inject script mới với config đã cập nhật
+                if (isAlreadyInjected()) {
+                    // Script đã inject rồi → chỉ update config JSON, KHÔNG re-inject
+                    console.log('[AG Auto] Script đã inject, chỉ update config JSON');
+                    updateStatusBarItem();
+                    const updatedLang = msg.data.language;
+                    let savedMsg = '[AG Auto] ✅ Đã lưu! Cài đặt được áp dụng tự động.';
+                    if (updatedLang === 'en') savedMsg = '[AG Auto] ✅ Saved! Settings applied automatically.';
+                    if (updatedLang === 'zh') savedMsg = '[AG Auto] ✅ 已保存！设置已自动应用。';
+                    vscode.window.showInformationMessage(savedMsg);
+                    return; // KHÔNG reload
+                }
+                // Lần đầu: inject script
                 installScript(context);
             } else {
                 // Tắt: gỡ script khỏi workbench.html luôn
