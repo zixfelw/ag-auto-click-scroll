@@ -331,20 +331,27 @@ function openSettingsPanel(context) {
                 await context.globalState.update('language', msg.data.language);
             }
 
-            // Update HTTP server state (patterns + enabled)
+            // Update ALL HTTP server state (enabled + patterns + scroll + click timing)
             _autoAcceptEnabled = msg.data.enabled;
             _httpClickPatterns = msg.data.clickPatterns.filter(p => !msg.data.disabledClickPatterns.includes(p));
-            console.log('[AG Auto] HTTP patterns updated:', JSON.stringify(_httpClickPatterns));
+            _httpScrollConfig = {
+                pauseScrollMs: msg.data.scrollPauseMs || 5000,
+                scrollIntervalMs: msg.data.scrollIntervalMs || 500,
+                clickIntervalMs: msg.data.clickIntervalMs || 2000
+            };
+            console.log('[AG Auto] HTTP state updated — patterns:', _httpClickPatterns.length, 'scroll:', JSON.stringify(_httpScrollConfig));
 
             writeConfigJson(context);
             updateStatusBarItem();
 
             const updatedLang = msg.data.language;
-            let savedMsg = '$(check) [AG Auto] ✅ Đã lưu! (patterns sẽ cập nhật trong 2s)';
-            if (updatedLang === 'en') savedMsg = '$(check) [AG Auto] ✅ Saved! (patterns update in 2s)';
+            let savedMsg = '$(check) [AG Auto] ✅ Đã lưu!';
+            if (updatedLang === 'en') savedMsg = '$(check) [AG Auto] ✅ Saved!';
             if (updatedLang === 'zh') savedMsg = '$(check) [AG Auto] ✅ 已保存！';
             vscode.window.setStatusBarMessage(savedMsg, 3000);
-            console.log('[AG Auto] ✅ Saved — patterns will sync via HTTP within 2s');
+        }
+        if (msg.command === 'reload') {
+            vscode.commands.executeCommand('workbench.action.reloadWindow');
         }
     }, undefined, context.subscriptions);
 }
@@ -656,6 +663,7 @@ function getSettingsHtml(cfg) {
 
     <div class="actions">
         <button class="btn btn-primary" onclick="saveSettings()">${strings.btnSave}</button>
+        <button class="btn" style="background:#45475a;color:#cdd6f4;" onclick="vscode.postMessage({command:'reload'})">🔄 Reload</button>
     </div>
 
 <script>
@@ -788,22 +796,33 @@ function updateStatusBarItem() {
 const http = require('http');
 let _autoAcceptEnabled = true;
 let _httpClickPatterns = [];
+let _httpScrollConfig = { pauseScrollMs: 5000, scrollIntervalMs: 500, clickIntervalMs: 2000 };
 let _httpServer = null;
 const AG_HTTP_PORT = 48787;
 
 function startHttpServer() {
     if (_httpServer) return;
-    // Initialize patterns from config
+    // Initialize from config
     const cfg = vscode.workspace.getConfiguration('ag-auto');
-    const allPats = cfg.get('clickPatterns', ['Allow', 'Always Allow', 'Run', 'Keep Waiting']);
-    _httpClickPatterns = allPats; // Will be filtered by disabledPatterns in save handler
+    _httpClickPatterns = cfg.get('clickPatterns', ['Allow', 'Always Allow', 'Run', 'Keep Waiting']);
+    _httpScrollConfig = {
+        pauseScrollMs: cfg.get('scrollPauseMs', 5000),
+        scrollIntervalMs: cfg.get('scrollIntervalMs', 500),
+        clickIntervalMs: cfg.get('clickIntervalMs', 2000)
+    };
     try {
         _httpServer = http.createServer((req, res) => {
             res.setHeader('Access-Control-Allow-Origin', '*');
             res.setHeader('Access-Control-Allow-Methods', 'GET');
             res.setHeader('Content-Type', 'application/json');
             res.writeHead(200);
-            res.end(JSON.stringify({ enabled: _autoAcceptEnabled, clickPatterns: _httpClickPatterns }));
+            res.end(JSON.stringify({
+                enabled: _autoAcceptEnabled,
+                clickPatterns: _httpClickPatterns,
+                pauseScrollMs: _httpScrollConfig.pauseScrollMs,
+                scrollIntervalMs: _httpScrollConfig.scrollIntervalMs,
+                clickIntervalMs: _httpScrollConfig.clickIntervalMs
+            }));
         });
         _httpServer.listen(AG_HTTP_PORT, '127.0.0.1', () => {
             console.log('[AG Auto] ✅ HTTP server started on port ' + AG_HTTP_PORT);

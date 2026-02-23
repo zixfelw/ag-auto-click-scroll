@@ -39,7 +39,11 @@
                 if (cfg.clickPatterns && Array.isArray(cfg.clickPatterns)) {
                     CLICK_PATTERNS = cfg.clickPatterns;
                 }
-                if (_agPollCount <= 2) console.log('[AG Auto] HTTP Poll #' + _agPollCount + ' OK, enabled=' + window._agAutoEnabled + ', patterns=' + CLICK_PATTERNS.length);
+                // Live-update scroll + click timing
+                if (cfg.pauseScrollMs) PAUSE_SCROLL_MS = cfg.pauseScrollMs;
+                if (cfg.scrollIntervalMs) SCROLL_INTERVAL_MS = cfg.scrollIntervalMs;
+                if (cfg.clickIntervalMs) CLICK_INTERVAL_MS = cfg.clickIntervalMs;
+                if (_agPollCount <= 2) console.log('[AG Auto] HTTP Poll #' + _agPollCount + ' OK, enabled=' + window._agAutoEnabled + ', patterns=' + CLICK_PATTERNS.length + ', scrollMs=' + SCROLL_INTERVAL_MS);
             } else {
                 // Try alternate port
                 var xhr2 = new XMLHttpRequest();
