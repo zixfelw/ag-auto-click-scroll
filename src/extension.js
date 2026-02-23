@@ -321,6 +321,7 @@ function openSettingsPanel(context) {
             _httpScrollEnabled = msg.enabled;
             const cfg = vscode.workspace.getConfiguration('ag-auto');
             await cfg.update('scrollEnabled', msg.enabled, vscode.ConfigurationTarget.Global);
+            updateStatusBarItem();
             console.log('[AG Auto] INSTANT scroll toggle: ' + (_httpScrollEnabled ? 'ON ✅' : 'OFF 🛑'));
             return;
         }
@@ -795,18 +796,26 @@ function createStatusBarItem(context) {
 
 function updateStatusBarItem() {
     const config = vscode.workspace.getConfiguration('ag-auto');
-    const enabled = config.get('enabled', true);
-    if (enabled) {
-        statusBarItem.text = '$(check) AG Auto Accept | Auto Scroll';
-        statusBarItem.tooltip = 'AG Auto Click & Scroll — ✅ ON\nClick để mở Settings';
-        statusBarItem.color = '#4EC9B0'; // green
+    const acceptOn = config.get('enabled', true);
+    const scrollOn = config.get('scrollEnabled', true);
+
+    const acceptLabel = acceptOn ? 'Accept ON' : 'Accept OFF';
+    const scrollLabel = scrollOn ? 'Scroll ON' : 'Scroll OFF';
+
+    if (acceptOn && scrollOn) {
+        statusBarItem.text = '$(check) ' + acceptLabel + ' | ' + scrollLabel;
+        statusBarItem.color = '#4EC9B0';
         statusBarItem.backgroundColor = undefined;
-    } else {
-        statusBarItem.text = '$(circle-slash) AG Auto Accept | Auto Scroll';
-        statusBarItem.tooltip = 'AG Auto Click & Scroll — ❌ OFF\nClick để mở Settings';
-        statusBarItem.color = '#F44747'; // red
+    } else if (!acceptOn && !scrollOn) {
+        statusBarItem.text = '$(circle-slash) ' + acceptLabel + ' | ' + scrollLabel;
+        statusBarItem.color = '#F44747';
         statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.errorBackground');
+    } else {
+        statusBarItem.text = '$(warning) ' + acceptLabel + ' | ' + scrollLabel;
+        statusBarItem.color = '#FFCC00';
+        statusBarItem.backgroundColor = undefined;
     }
+    statusBarItem.tooltip = 'AG Auto Click & Scroll\nAccept: ' + (acceptOn ? '✅ ON' : '❌ OFF') + '\nScroll: ' + (scrollOn ? '✅ ON' : '❌ OFF') + '\nClick để mở Settings';
 }
 
 // =============================================================
