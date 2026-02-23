@@ -305,6 +305,16 @@ function openSettingsPanel(context) {
             });
             return;
         }
+        if (msg.command === 'toggle') {
+            // INSTANT toggle from switch — no Save needed
+            _autoAcceptEnabled = msg.enabled;
+            const cfg = vscode.workspace.getConfiguration('ag-auto');
+            await cfg.update('enabled', msg.enabled, vscode.ConfigurationTarget.Global);
+            writeConfigJson(context);
+            updateStatusBarItem();
+            console.log('[AG Auto] INSTANT toggle: ' + (_autoAcceptEnabled ? 'ON ✅' : 'OFF 🛑'));
+            return;
+        }
         if (msg.command === 'save') {
             console.log('[AG Auto] Nhận lệnh SAVE từ Webview, data:', JSON.stringify(msg.data));
             const cfg = vscode.workspace.getConfiguration('ag-auto');
@@ -321,20 +331,25 @@ function openSettingsPanel(context) {
                 await context.globalState.update('language', msg.data.language);
             }
 
+            // Update HTTP server state (patterns + enabled)
+            _autoAcceptEnabled = msg.data.enabled;
+            _httpClickPatterns = msg.data.clickPatterns.filter(p => !msg.data.disabledClickPatterns.includes(p));
+            console.log('[AG Auto] HTTP patterns updated:', JSON.stringify(_httpClickPatterns));
 
             writeConfigJson(context);
-
-            // INSTANT ON/OFF toggle for auto-accept (Commands API)
-            _autoAcceptEnabled = msg.data.enabled;
-            console.log('[AG Auto] Auto-accept ' + (_autoAcceptEnabled ? 'ON ✅' : 'OFF 🛑'));
-
             updateStatusBarItem();
 
-            const updatedLang = msg.data.language;
-            let savedMsg = '$(check) [AG Auto] ✅ Đã lưu!';
-            if (updatedLang === 'en') savedMsg = '$(check) [AG Auto] ✅ Saved!';
-            if (updatedLang === 'zh') savedMsg = '$(check) [AG Auto] ✅ 已保存！';
-            vscode.window.setStatusBarMessage(savedMsg, 3000);
+            // Re-inject script with updated patterns + auto-reload
+            try {
+                installScript(context);
+                console.log('[AG Auto] ✅ Script re-injected with updated patterns');
+                vscode.window.showInformationMessage('[AG Auto] ✅ Saved! Reloading to apply new patterns...');
+                setTimeout(() => {
+                    vscode.commands.executeCommand('workbench.action.reloadWindow');
+                }, 1000);
+            } catch (e) {
+                console.error('[AG Auto] Re-inject error:', e.message);
+            }
         }
     }, undefined, context.subscriptions);
 }
@@ -495,8 +510,8 @@ function getSettingsHtml(cfg) {
         border-radius: 50%;
         transition: 0.3s;
     }
-    .toggle input:checked + .slider { background: #a6e3a1; }
-    .toggle input:checked + .slider::before { transform: translateX(24px); }
+    .toggle input:checked + .slider { background: #00d26a; box-shadow: 0 0 12px rgba(0,210,106,0.5); }
+    .toggle input:checked + .slider::before { transform: translateX(24px); background: #fff; }
 
     /* Patterns */
     .pattern-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
@@ -596,7 +611,7 @@ function getSettingsHtml(cfg) {
         <div class="field">
             <label>${strings.enableAuto}</label>
             <label class="toggle">
-                <input type="checkbox" id="chkEnabled" ${cfg.enabled ? 'checked' : ''}>
+                <input type="checkbox" id="chkEnabled" ${cfg.enabled ? 'checked' : ''} onchange="instantToggle()">
                 <span class="slider"></span>
             </label>
         </div>
@@ -724,6 +739,11 @@ function getSettingsHtml(cfg) {
 
     renderPatterns();
 
+    function instantToggle() {
+        var enabled = document.getElementById('chkEnabled').checked;
+        vscode.postMessage({ command: 'toggle', enabled: enabled });
+    }
+
     function changeLang() {
         const newLang = document.getElementById('selLang').value;
         vscode.postMessage({ command: 'changeLang', lang: newLang });
@@ -772,18 +792,23 @@ function updateStatusBarItem() {
 // =============================================================
 const http = require('http');
 let _autoAcceptEnabled = true;
+let _httpClickPatterns = [];
 let _httpServer = null;
 const AG_HTTP_PORT = 48787;
 
 function startHttpServer() {
     if (_httpServer) return;
+    // Initialize patterns from config
+    const cfg = vscode.workspace.getConfiguration('ag-auto');
+    const allPats = cfg.get('clickPatterns', ['Allow', 'Always Allow', 'Run', 'Keep Waiting']);
+    _httpClickPatterns = allPats; // Will be filtered by disabledPatterns in save handler
     try {
         _httpServer = http.createServer((req, res) => {
             res.setHeader('Access-Control-Allow-Origin', '*');
             res.setHeader('Access-Control-Allow-Methods', 'GET');
             res.setHeader('Content-Type', 'application/json');
             res.writeHead(200);
-            res.end(JSON.stringify({ enabled: _autoAcceptEnabled }));
+            res.end(JSON.stringify({ enabled: _autoAcceptEnabled, clickPatterns: _httpClickPatterns }));
         });
         _httpServer.listen(AG_HTTP_PORT, '127.0.0.1', () => {
             console.log('[AG Auto] ✅ HTTP server started on port ' + AG_HTTP_PORT);

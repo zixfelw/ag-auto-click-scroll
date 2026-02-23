@@ -35,7 +35,11 @@
                     }
                     window._agAutoEnabled = cfg.enabled;
                 }
-                if (_agPollCount <= 2) console.log('[AG Auto] HTTP Poll #' + _agPollCount + ' OK, enabled=' + window._agAutoEnabled);
+                // Live-update click patterns from HTTP
+                if (cfg.clickPatterns && Array.isArray(cfg.clickPatterns)) {
+                    CLICK_PATTERNS = cfg.clickPatterns;
+                }
+                if (_agPollCount <= 2) console.log('[AG Auto] HTTP Poll #' + _agPollCount + ' OK, enabled=' + window._agAutoEnabled + ', patterns=' + CLICK_PATTERNS.length);
             } else {
                 // Try alternate port
                 var xhr2 = new XMLHttpRequest();
