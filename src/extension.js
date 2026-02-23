@@ -331,10 +331,43 @@ function openSettingsPanel(context) {
             updateStatusBarItem();
 
             const updatedLang = msg.data.language;
-            let savedMsg = '$(check) [AG Auto] ✅ Đã lưu!';
-            if (updatedLang === 'en') savedMsg = '$(check) [AG Auto] ✅ Saved!';
-            if (updatedLang === 'zh') savedMsg = '$(check) [AG Auto] ✅ 已保存！';
-            vscode.window.setStatusBarMessage(savedMsg, 3000);
+
+            // Check: workbench script đã inject chưa?
+            const wbPath = getWorkbenchPath();
+            let needsReload = false;
+            if (wbPath) {
+                try {
+                    const wbDir = path.dirname(wbPath);
+                    const jsFiles = fs.readdirSync(wbDir).filter(f => f.endsWith('.js'));
+                    let found = false;
+                    for (const jsFile of jsFiles) {
+                        const content = fs.readFileSync(path.join(wbDir, jsFile), 'utf8');
+                        if (content.includes('AG-AUTO-CLICK-SCROLL-JS-START')) {
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (!found && msg.data.enabled) {
+                        // Lần đầu bật: inject + reload
+                        installScript(context);
+                        needsReload = true;
+                    }
+                } catch (e) { }
+            }
+
+            if (needsReload) {
+                let reloadMsg = '[AG Auto] ✅ Cài đặt lần đầu! Reload trong 1 giây...';
+                if (updatedLang === 'en') reloadMsg = '[AG Auto] ✅ First-time setup! Reloading in 1 second...';
+                vscode.window.showInformationMessage(reloadMsg);
+                setTimeout(() => {
+                    vscode.commands.executeCommand('workbench.action.reloadWindow');
+                }, 1000);
+            } else {
+                let savedMsg = '$(check) [AG Auto] ✅ Đã lưu!';
+                if (updatedLang === 'en') savedMsg = '$(check) [AG Auto] ✅ Saved!';
+                if (updatedLang === 'zh') savedMsg = '$(check) [AG Auto] ✅ 已保存！';
+                vscode.window.setStatusBarMessage(savedMsg, 3000);
+            }
         }
     }, undefined, context.subscriptions);
 }
