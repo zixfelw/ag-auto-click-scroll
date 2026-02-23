@@ -339,17 +339,12 @@ function openSettingsPanel(context) {
             writeConfigJson(context);
             updateStatusBarItem();
 
-            // Re-inject script with updated patterns + auto-reload
-            try {
-                installScript(context);
-                console.log('[AG Auto] ✅ Script re-injected with updated patterns');
-                vscode.window.showInformationMessage('[AG Auto] ✅ Saved! Reloading to apply new patterns...');
-                setTimeout(() => {
-                    vscode.commands.executeCommand('workbench.action.reloadWindow');
-                }, 1000);
-            } catch (e) {
-                console.error('[AG Auto] Re-inject error:', e.message);
-            }
+            const updatedLang = msg.data.language;
+            let savedMsg = '$(check) [AG Auto] ✅ Đã lưu! (patterns sẽ cập nhật trong 2s)';
+            if (updatedLang === 'en') savedMsg = '$(check) [AG Auto] ✅ Saved! (patterns update in 2s)';
+            if (updatedLang === 'zh') savedMsg = '$(check) [AG Auto] ✅ 已保存！';
+            vscode.window.setStatusBarMessage(savedMsg, 3000);
+            console.log('[AG Auto] ✅ Saved — patterns will sync via HTTP within 2s');
         }
     }, undefined, context.subscriptions);
 }
