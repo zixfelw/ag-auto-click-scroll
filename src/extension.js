@@ -754,13 +754,15 @@ function updateStatusBarItem() {
     const config = vscode.workspace.getConfiguration('ag-auto');
     const enabled = config.get('enabled', true);
     if (enabled) {
-        statusBarItem.text = '$(zap) AG Auto Accept | Auto Scroll';
-        statusBarItem.tooltip = 'AG Auto Click & Scroll — Đang BẬT\nClick để mở Settings';
+        statusBarItem.text = '$(check) AG Auto Accept | Auto Scroll';
+        statusBarItem.tooltip = 'AG Auto Click & Scroll — ✅ ON\nClick để mở Settings';
+        statusBarItem.color = '#4EC9B0'; // green
         statusBarItem.backgroundColor = undefined;
     } else {
         statusBarItem.text = '$(circle-slash) AG Auto Accept | Auto Scroll';
-        statusBarItem.tooltip = 'AG Auto Click & Scroll — Đang TẮT\nClick để mở Settings';
-        statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
+        statusBarItem.tooltip = 'AG Auto Click & Scroll — ❌ OFF\nClick để mở Settings';
+        statusBarItem.color = '#F44747'; // red
+        statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.errorBackground');
     }
 }
 
