@@ -18,55 +18,38 @@
     // Live ON/OFF flag — exposed on window for all scopes + DevTools access
     window._agAutoEnabled = /*{{ENABLED}}*/true;
 
-    // --- Config file path + fs module (captured in closure at startup) ---
-    var _agConfigPath = '/*{{CONFIG_PATH}}*/';
-    var _agFs = null;
-    try { _agFs = require('fs'); } catch (e) { }
-    if (!_agFs) try { _agFs = globalThis.__non_webpack_require__('fs'); } catch (e) { }
-
-    console.log('[AG Auto] Config path:', _agConfigPath);
-    console.log('[AG Auto] fs module:', _agFs ? 'loaded ✅' : 'NOT available ❌');
-
-    // Test read at startup
-    if (_agFs) {
-        try {
-            var _testRaw = _agFs.readFileSync(_agConfigPath, 'utf8');
-            var _testCfg = JSON.parse(_testRaw);
-            console.log('[AG Auto] Config test read: OK ✅, enabled=' + _testCfg.enabled);
-            if (typeof _testCfg.enabled === 'boolean') window._agAutoEnabled = _testCfg.enabled;
-        } catch (e) {
-            console.log('[AG Auto] Config test read: FAILED ❌', e.message);
-        }
-    }
-
-    // --- Config polling (reads file every 2s using captured _agFs) ---
+    // --- ON/OFF polling via HTTP server (Extension Host runs on port 48787) ---
+    var AG_HTTP_PORT = 48787;
     var _agPollCount = 0;
     var _agConfigReload = setInterval(function () {
         _agPollCount++;
         try {
-            if (!_agFs) {
-                if (_agPollCount <= 2) console.log('[AG Auto] Poll: fs unavailable');
-                return;
-            }
-            var raw = _agFs.readFileSync(_agConfigPath, 'utf8');
-            var cfg = JSON.parse(raw);
-            if (!cfg) return;
-
-            if (cfg.clickPatterns && Array.isArray(cfg.clickPatterns)) CLICK_PATTERNS = cfg.clickPatterns;
-            if (cfg.pauseScrollMs) PAUSE_SCROLL_MS = cfg.pauseScrollMs;
-            if (cfg.scrollIntervalMs) SCROLL_INTERVAL_MS = cfg.scrollIntervalMs;
-            if (cfg.clickIntervalMs) CLICK_INTERVAL_MS = cfg.clickIntervalMs;
-
-            if (typeof cfg.enabled === 'boolean') {
-                if (window._agAutoEnabled !== cfg.enabled) {
-                    console.log('[AG Auto] ' + (cfg.enabled ? '✅ BẬT' : '❌ TẮT') + ' (live toggle)');
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', 'http://127.0.0.1:' + AG_HTTP_PORT + '/ag-status', false); // sync
+            xhr.timeout = 500;
+            xhr.send();
+            if (xhr.status === 200) {
+                var cfg = JSON.parse(xhr.responseText);
+                if (typeof cfg.enabled === 'boolean') {
+                    if (window._agAutoEnabled !== cfg.enabled) {
+                        console.log('[AG Auto] ' + (cfg.enabled ? '✅ BẬT' : '❌ TẮT') + ' (live toggle via HTTP)');
+                    }
+                    window._agAutoEnabled = cfg.enabled;
                 }
-                window._agAutoEnabled = cfg.enabled;
+                if (_agPollCount <= 2) console.log('[AG Auto] HTTP Poll #' + _agPollCount + ' OK, enabled=' + window._agAutoEnabled);
+            } else {
+                // Try alternate port
+                var xhr2 = new XMLHttpRequest();
+                xhr2.open('GET', 'http://127.0.0.1:' + (AG_HTTP_PORT + 1) + '/ag-status', false);
+                xhr2.timeout = 500;
+                xhr2.send();
+                if (xhr2.status === 200) {
+                    var cfg2 = JSON.parse(xhr2.responseText);
+                    if (typeof cfg2.enabled === 'boolean') window._agAutoEnabled = cfg2.enabled;
+                }
             }
-
-            if (_agPollCount <= 2) console.log('[AG Auto] Poll #' + _agPollCount + ' OK, enabled=' + window._agAutoEnabled);
         } catch (e) {
-            if (_agPollCount <= 5) console.log('[AG Auto] Poll #' + _agPollCount + ' error:', e.message);
+            if (_agPollCount <= 3) console.log('[AG Auto] HTTP Poll #' + _agPollCount + ' error:', e.message);
         }
     }, 2000);
     window._agToolIntervals.push(_agConfigReload);

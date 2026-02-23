@@ -766,13 +766,42 @@ function updateStatusBarItem() {
 }
 
 // =============================================================
-// AUTO-ACCEPT + AUTO-SCROLL via Commands API (instant ON/OFF)
-// Full Antigravity commands list (from MunKhin reference)
+// HTTP MICRO-SERVER for IPC with injected workbench script
+// The injected script polls http://127.0.0.1:48787/ag-status
+// Extension Host controls _autoAcceptEnabled, server returns it
 // =============================================================
+const http = require('http');
 let _autoAcceptEnabled = true;
-let _autoAcceptInterval = null;
-let _autoScrollInterval = null;
+let _httpServer = null;
+const AG_HTTP_PORT = 48787;
 
+function startHttpServer() {
+    if (_httpServer) return;
+    try {
+        _httpServer = http.createServer((req, res) => {
+            res.setHeader('Access-Control-Allow-Origin', '*');
+            res.setHeader('Access-Control-Allow-Methods', 'GET');
+            res.setHeader('Content-Type', 'application/json');
+            res.writeHead(200);
+            res.end(JSON.stringify({ enabled: _autoAcceptEnabled }));
+        });
+        _httpServer.listen(AG_HTTP_PORT, '127.0.0.1', () => {
+            console.log('[AG Auto] ✅ HTTP server started on port ' + AG_HTTP_PORT);
+        });
+        _httpServer.on('error', (e) => {
+            console.log('[AG Auto] ⚠️ HTTP server error (port ' + AG_HTTP_PORT + '):', e.message);
+            // Try alternate port
+            _httpServer.listen(AG_HTTP_PORT + 1, '127.0.0.1', () => {
+                console.log('[AG Auto] ✅ HTTP server started on port ' + (AG_HTTP_PORT + 1));
+            });
+        });
+    } catch (e) {
+        console.log('[AG Auto] HTTP server failed:', e.message);
+    }
+}
+
+// Keep Commands API as bonus (silent accept in background)
+let _autoAcceptInterval = null;
 const ACCEPT_COMMANDS = [
     'antigravity.agent.acceptAgentStep',
     'antigravity.command.accept',
@@ -780,120 +809,47 @@ const ACCEPT_COMMANDS = [
     'antigravity.prioritized.agentAcceptFocusedHunk',
     'antigravity.prioritized.supercompleteAccept',
     'antigravity.terminalCommand.accept',
-    'antigravity.acceptCompletion',
-    'antigravity.prioritized.terminalSuggestion.accept',
-    'antigravity.terminal.accept'
+    'antigravity.acceptCompletion'
 ];
 
-function startAutoAcceptLoop(context) {
+function startCommandsLoop() {
     const config = vscode.workspace.getConfiguration('ag-auto');
     _autoAcceptEnabled = config.get('enabled', true);
-    const clickMs = config.get('clickIntervalMs', 500);
-    const scrollMs = config.get('scrollIntervalMs', 500);
+    const clickMs = config.get('clickIntervalMs', 2000);
 
     if (_autoAcceptInterval) clearInterval(_autoAcceptInterval);
-    if (_autoScrollInterval) clearInterval(_autoScrollInterval);
 
-    // DEBUG: List all available antigravity commands on startup
-    vscode.commands.getCommands(true).then(allCmds => {
-        const agCmds = allCmds.filter(c => c.toLowerCase().includes('antigravity') || c.toLowerCase().includes('accept') || c.toLowerCase().includes('terminal'));
-        console.log('[AG Auto] 📋 Available AG/accept/terminal commands (' + agCmds.length + '):');
-        agCmds.forEach(c => console.log('[AG Auto]   → ' + c));
-    });
-
-    let _debugCount = 0;
-
-    // Auto-accept: fire ALL commands, log results for first 3 cycles
-    _autoAcceptInterval = setInterval(async () => {
+    _autoAcceptInterval = setInterval(() => {
         if (!_autoAcceptEnabled) return;
-
-        _debugCount++;
-        const shouldLog = _debugCount <= 3;
-
-        if (shouldLog) console.log('[AG Auto] 🔄 Poll #' + _debugCount + ' executing ' + ACCEPT_COMMANDS.length + ' commands...');
-
-        const results = await Promise.allSettled(
+        Promise.allSettled(
             ACCEPT_COMMANDS.map(cmd => vscode.commands.executeCommand(cmd))
-        );
-
-        if (shouldLog) {
-            results.forEach((r, i) => {
-                if (r.status === 'fulfilled') {
-                    console.log('[AG Auto]   ✅ ' + ACCEPT_COMMANDS[i] + ' → OK');
-                } else {
-                    console.log('[AG Auto]   ❌ ' + ACCEPT_COMMANDS[i] + ' → ' + (r.reason?.message || r.reason));
-                }
-            });
-        }
+        ).catch(() => { });
     }, clickMs);
 
-    // Auto-scroll
-    _autoScrollInterval = setInterval(() => {
-        if (!_autoAcceptEnabled) return;
-        vscode.commands.executeCommand('workbench.action.terminal.scrollToBottom').catch(() => { });
-    }, scrollMs);
-
-    console.log('[AG Auto] Loop started (click: ' + clickMs + 'ms, scroll: ' + scrollMs + 'ms, enabled: ' + _autoAcceptEnabled + ', commands: ' + ACCEPT_COMMANDS.length + ')');
+    console.log('[AG Auto] Commands loop started (interval: ' + clickMs + 'ms, enabled: ' + _autoAcceptEnabled + ')');
 }
 
 // =============================================================
 // EXTENSION ACTIVATION
 // =============================================================
 function activate(context) {
-    console.log('[AG Auto] Extension đang khởi động (v4.18.0)...');
+    console.log('[AG Auto] Extension đang khởi động (v4.21.0)...');
 
-    // ---- Auto-cleanup: gỡ script cũ khỏi workbench + auto-reload ----
-    const JS_MARKER = 'AG-AUTO-CLICK-SCROLL-JS-START';
-    const HTML_MARKER = 'AG-AUTO-CLICK-SCROLL-START';
-    const CLEAN_KEY = 'ag-auto-cleaned-v4.19';
+    // 1. Start HTTP server for IPC (injected script polls this for ON/OFF)
+    startHttpServer();
 
-    const alreadyCleaned = context.globalState.get(CLEAN_KEY, false);
-
-    if (!alreadyCleaned) {
-        try {
-            const wbPath = getWorkbenchPath();
-            if (wbPath) {
-                const wbDir = path.dirname(wbPath);
-                let hasOldInjection = false;
-
-                // Check HTML
-                const html = fs.readFileSync(wbPath, 'utf8');
-                if (html.includes(HTML_MARKER)) hasOldInjection = true;
-
-                // Check JS files
-                const jsFiles = ['workbench.desktop.main.js', 'workbench.js'];
-                for (const name of jsFiles) {
-                    const p = path.join(wbDir, name);
-                    if (fs.existsSync(p)) {
-                        const content = fs.readFileSync(p, 'utf8');
-                        if (content.includes(JS_MARKER)) hasOldInjection = true;
-                    }
-                }
-
-                if (hasOldInjection) {
-                    console.log('[AG Auto] ⚠️ Old injection found! Cleaning + auto-reload...');
-                    uninstallScript();
-                    context.globalState.update(CLEAN_KEY, true);
-                    setTimeout(() => {
-                        vscode.commands.executeCommand('workbench.action.reloadWindow');
-                    }, 500);
-                    return; // Stop activation, reload will restart
-                } else {
-                    console.log('[AG Auto] ✅ Workbench clean, no old injection');
-                    context.globalState.update(CLEAN_KEY, true);
-                }
-            }
-        } catch (e) {
-            console.log('[AG Auto] Cleanup check error:', e.message);
-        }
-    } else {
-        console.log('[AG Auto] ✅ Already cleaned, skipping check');
+    // 2. Inject script into workbench for DOM clicking + scrolling
+    try {
+        installScript(context);
+        console.log('[AG Auto] ✅ Script injected for DOM clicking + scrolling');
+    } catch (e) {
+        console.error('[AG Auto] Inject error:', e.message);
     }
 
-    // ---- Auto-Accept via Commands API (instant ON/OFF, like pesosz) ----
-    startAutoAcceptLoop(context);
+    // 3. Commands API as bonus background accept
+    startCommandsLoop();
 
-    // Write config JSON (for reference)
+    // 4. Write config JSON
     writeConfigJson(context);
 
     // ---- Status Bar Button ----
