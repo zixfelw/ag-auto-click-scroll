@@ -278,6 +278,7 @@ function openSettingsPanel(context) {
 
     panel.webview.html = getSettingsHtml({
         enabled: config.get('enabled', true),
+        scrollEnabled: config.get('scrollEnabled', true),
         scrollPauseMs: config.get('scrollPauseMs', 7000),
         scrollIntervalMs: config.get('scrollIntervalMs', 500),
         clickIntervalMs: config.get('clickIntervalMs', 1000),
@@ -296,6 +297,7 @@ function openSettingsPanel(context) {
             // Render lại panel với ngôn ngữ mới
             panel.webview.html = getSettingsHtml({
                 enabled: cfg.get('enabled', true),
+                scrollEnabled: cfg.get('scrollEnabled', true),
                 scrollPauseMs: cfg.get('scrollPauseMs', 7000),
                 scrollIntervalMs: cfg.get('scrollIntervalMs', 500),
                 clickIntervalMs: cfg.get('clickIntervalMs', 1000),
@@ -313,6 +315,13 @@ function openSettingsPanel(context) {
             writeConfigJson(context);
             updateStatusBarItem();
             console.log('[AG Auto] INSTANT toggle: ' + (_autoAcceptEnabled ? 'ON ✅' : 'OFF 🛑'));
+            return;
+        }
+        if (msg.command === 'scrollToggle') {
+            _httpScrollEnabled = msg.enabled;
+            const cfg = vscode.workspace.getConfiguration('ag-auto');
+            await cfg.update('scrollEnabled', msg.enabled, vscode.ConfigurationTarget.Global);
+            console.log('[AG Auto] INSTANT scroll toggle: ' + (_httpScrollEnabled ? 'ON ✅' : 'OFF 🛑'));
             return;
         }
         if (msg.command === 'save') {
@@ -631,6 +640,13 @@ function getSettingsHtml(cfg) {
     <div class="card">
         <div class="card-title">📜 ${strings.autoScroll}</div>
         <div class="field">
+            <label>Enable Auto Scroll</label>
+            <label class="toggle">
+                <input type="checkbox" id="chkScrollEnabled" ${cfg.scrollEnabled !== false ? 'checked' : ''} onchange="scrollToggle()">
+                <span class="slider"></span>
+            </label>
+        </div>
+        <div class="field" style="margin-top:12px;">
             <label>${strings.pauseMsTitle}</label>
             <input type="number" id="txtPauseMs" value="${cfg.scrollPauseMs}" min="1000" max="60000" step="500">
         </div>
@@ -747,6 +763,11 @@ function getSettingsHtml(cfg) {
         vscode.postMessage({ command: 'toggle', enabled: enabled });
     }
 
+    function scrollToggle() {
+        var enabled = document.getElementById('chkScrollEnabled').checked;
+        vscode.postMessage({ command: 'scrollToggle', enabled: enabled });
+    }
+
     function changeLang() {
         const newLang = document.getElementById('selLang').value;
         vscode.postMessage({ command: 'changeLang', lang: newLang });
@@ -795,6 +816,7 @@ function updateStatusBarItem() {
 // =============================================================
 const http = require('http');
 let _autoAcceptEnabled = true;
+let _httpScrollEnabled = true;
 let _httpClickPatterns = [];
 let _httpScrollConfig = { pauseScrollMs: 5000, scrollIntervalMs: 500, clickIntervalMs: 2000 };
 let _httpServer = null;
@@ -805,6 +827,7 @@ function startHttpServer() {
     // Initialize from config
     const cfg = vscode.workspace.getConfiguration('ag-auto');
     _httpClickPatterns = cfg.get('clickPatterns', ['Allow', 'Always Allow', 'Run', 'Keep Waiting']);
+    _httpScrollEnabled = cfg.get('scrollEnabled', true);
     _httpScrollConfig = {
         pauseScrollMs: cfg.get('scrollPauseMs', 5000),
         scrollIntervalMs: cfg.get('scrollIntervalMs', 500),
@@ -818,6 +841,7 @@ function startHttpServer() {
             res.writeHead(200);
             res.end(JSON.stringify({
                 enabled: _autoAcceptEnabled,
+                scrollEnabled: _httpScrollEnabled,
                 clickPatterns: _httpClickPatterns,
                 pauseScrollMs: _httpScrollConfig.pauseScrollMs,
                 scrollIntervalMs: _httpScrollConfig.scrollIntervalMs,

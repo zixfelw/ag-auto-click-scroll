@@ -17,6 +17,7 @@
 
     // Live ON/OFF flag — exposed on window for all scopes + DevTools access
     window._agAutoEnabled = /*{{ENABLED}}*/true;
+    window._agScrollEnabled = true; // separate scroll toggle
 
     // --- ON/OFF polling via HTTP server (Extension Host runs on port 48787) ---
     var AG_HTTP_PORT = 48787;
@@ -34,6 +35,10 @@
                         console.log('[AG Auto] ' + (cfg.enabled ? '✅ BẬT' : '❌ TẮT') + ' (live toggle via HTTP)');
                     }
                     window._agAutoEnabled = cfg.enabled;
+                }
+                // Live-update scroll toggle
+                if (typeof cfg.scrollEnabled === 'boolean') {
+                    window._agScrollEnabled = cfg.scrollEnabled;
                 }
                 // Live-update click patterns from HTTP
                 if (cfg.clickPatterns && Array.isArray(cfg.clickPatterns)) {
@@ -149,6 +154,7 @@
     // --- 3. AUTO SCROLL ---
     var autoScroll = setInterval(function () {
         if (!window._agAutoEnabled) return;
+        if (!window._agScrollEnabled) return;
 
         var now = Date.now();
         if (now - lastManualScrollTime < PAUSE_SCROLL_MS) return;
