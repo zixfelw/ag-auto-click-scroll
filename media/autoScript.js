@@ -14,30 +14,57 @@
     // Live ON/OFF flag — controlled via config file polling, no reload needed
     var _agEnabled = /*{{ENABLED}}*/true;
 
-    // --- Dynamic config reload via Node.js fs (bypasses CSP) ---
+    // --- Dynamic config reload (multiple fallback methods) ---
     var _agConfigPath = '/*{{CONFIG_PATH}}*/';
+
+    // Try to get Node.js fs module (multiple methods for different Electron configs)
     var _agFs = null;
     try { _agFs = require('fs'); } catch (e) { }
+    if (!_agFs) try { _agFs = globalThis.__non_webpack_require__('fs'); } catch (e) { }
+    if (!_agFs) try { _agFs = globalThis.nodeRequire('fs'); } catch (e) { }
 
-    var _agConfigReload = setInterval(function () {
-        if (!_agFs || !_agConfigPath) return;
+    console.log('[AG Auto] Config path:', _agConfigPath);
+    console.log('[AG Auto] fs module:', _agFs ? 'loaded ✅' : 'not available, using XHR');
+
+    function _agReadConfig() {
+        // Method 1: Node.js fs (fastest, most reliable if available)
+        if (_agFs) {
+            try {
+                return JSON.parse(_agFs.readFileSync(_agConfigPath, 'utf8'));
+            } catch (e) { }
+        }
+        // Method 2: Synchronous XMLHttpRequest to file:// (works in Electron)
         try {
-            var raw = _agFs.readFileSync(_agConfigPath, 'utf8');
-            var cfg = JSON.parse(raw);
-            if (cfg) {
-                if (cfg.clickPatterns && Array.isArray(cfg.clickPatterns)) CLICK_PATTERNS = cfg.clickPatterns;
-                if (cfg.pauseScrollMs) PAUSE_SCROLL_MS = cfg.pauseScrollMs;
-                if (cfg.scrollIntervalMs) SCROLL_INTERVAL_MS = cfg.scrollIntervalMs;
-                if (cfg.clickIntervalMs) CLICK_INTERVAL_MS = cfg.clickIntervalMs;
-                // Live ON/OFF toggle
-                if (typeof cfg.enabled === 'boolean') {
-                    if (_agEnabled !== cfg.enabled) {
-                        console.log('[AG Auto] ' + (cfg.enabled ? '✅ BẬT' : '❌ TẮT') + ' (live toggle, no reload)');
-                    }
-                    _agEnabled = cfg.enabled;
-                }
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', 'file:///' + _agConfigPath.replace(/\\/g, '/'), false);
+            xhr.send();
+            if (xhr.status === 0 || xhr.status === 200) {
+                return JSON.parse(xhr.responseText);
             }
         } catch (e) { }
+        return null;
+    }
+
+    // Test config read immediately
+    var _agTestCfg = _agReadConfig();
+    console.log('[AG Auto] Config test read:', _agTestCfg ? 'OK ✅' : 'FAILED ❌');
+
+    var _agConfigReload = setInterval(function () {
+        if (!_agConfigPath) return;
+        var cfg = _agReadConfig();
+        if (cfg) {
+            if (cfg.clickPatterns && Array.isArray(cfg.clickPatterns)) CLICK_PATTERNS = cfg.clickPatterns;
+            if (cfg.pauseScrollMs) PAUSE_SCROLL_MS = cfg.pauseScrollMs;
+            if (cfg.scrollIntervalMs) SCROLL_INTERVAL_MS = cfg.scrollIntervalMs;
+            if (cfg.clickIntervalMs) CLICK_INTERVAL_MS = cfg.clickIntervalMs;
+            // Live ON/OFF toggle
+            if (typeof cfg.enabled === 'boolean') {
+                if (_agEnabled !== cfg.enabled) {
+                    console.log('[AG Auto] ' + (cfg.enabled ? '✅ BẬT' : '❌ TẮT') + ' (live toggle, no reload)');
+                }
+                _agEnabled = cfg.enabled;
+            }
+        }
     }, 2000);
     window._agToolIntervals.push(_agConfigReload);
 
