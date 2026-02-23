@@ -833,23 +833,38 @@ function startCommandsLoop() {
 // EXTENSION ACTIVATION
 // =============================================================
 function activate(context) {
-    console.log('[AG Auto] Extension đang khởi động (v4.21.0)...');
+    console.log('[AG Auto] Extension đang khởi động (v4.22.0)...');
 
-    // 1. Start HTTP server for IPC (injected script polls this for ON/OFF)
-    startHttpServer();
+    const INJECT_KEY = 'ag-auto-injected-v4.22';
+    const alreadyInjected = context.globalState.get(INJECT_KEY, false);
 
-    // 2. Inject script into workbench for DOM clicking + scrolling
-    try {
-        installScript(context);
-        console.log('[AG Auto] ✅ Script injected for DOM clicking + scrolling');
-    } catch (e) {
-        console.error('[AG Auto] Inject error:', e.message);
+    if (!alreadyInjected) {
+        // FIRST RUN: inject into workbench files + auto-reload
+        console.log('[AG Auto] First run — injecting into workbench...');
+        try {
+            installScript(context);
+            context.globalState.update(INJECT_KEY, true);
+            console.log('[AG Auto] ✅ Injected! Auto-reload in 1s...');
+            vscode.window.showInformationMessage('[AG Auto] ✅ Installed! Reloading...');
+            setTimeout(() => {
+                vscode.commands.executeCommand('workbench.action.reloadWindow');
+            }, 1000);
+            return; // Stop — reload will restart extension
+        } catch (e) {
+            console.error('[AG Auto] Inject error:', e.message);
+        }
     }
 
-    // 3. Commands API as bonus background accept
+    // SECOND RUN (after reload): workbench.js has our injected code running
+    console.log('[AG Auto] ✅ Script already injected, starting services...');
+
+    // 1. HTTP server for IPC (injected script polls this for ON/OFF)
+    startHttpServer();
+
+    // 2. Commands API as bonus background accept
     startCommandsLoop();
 
-    // 4. Write config JSON
+    // 3. Write config JSON
     writeConfigJson(context);
 
     // ---- Status Bar Button ----
