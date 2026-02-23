@@ -788,18 +788,43 @@ const ACCEPT_COMMANDS = [
 function startAutoAcceptLoop(context) {
     const config = vscode.workspace.getConfiguration('ag-auto');
     _autoAcceptEnabled = config.get('enabled', true);
-    const clickMs = config.get('clickIntervalMs', 500); // faster default
+    const clickMs = config.get('clickIntervalMs', 500);
     const scrollMs = config.get('scrollIntervalMs', 500);
 
     if (_autoAcceptInterval) clearInterval(_autoAcceptInterval);
     if (_autoScrollInterval) clearInterval(_autoScrollInterval);
 
-    // Auto-accept: fire ALL commands at once via Promise.allSettled
-    _autoAcceptInterval = setInterval(() => {
+    // DEBUG: List all available antigravity commands on startup
+    vscode.commands.getCommands(true).then(allCmds => {
+        const agCmds = allCmds.filter(c => c.toLowerCase().includes('antigravity') || c.toLowerCase().includes('accept') || c.toLowerCase().includes('terminal'));
+        console.log('[AG Auto] 📋 Available AG/accept/terminal commands (' + agCmds.length + '):');
+        agCmds.forEach(c => console.log('[AG Auto]   → ' + c));
+    });
+
+    let _debugCount = 0;
+
+    // Auto-accept: fire ALL commands, log results for first 3 cycles
+    _autoAcceptInterval = setInterval(async () => {
         if (!_autoAcceptEnabled) return;
-        Promise.allSettled(
+
+        _debugCount++;
+        const shouldLog = _debugCount <= 3;
+
+        if (shouldLog) console.log('[AG Auto] 🔄 Poll #' + _debugCount + ' executing ' + ACCEPT_COMMANDS.length + ' commands...');
+
+        const results = await Promise.allSettled(
             ACCEPT_COMMANDS.map(cmd => vscode.commands.executeCommand(cmd))
-        ).catch(() => { });
+        );
+
+        if (shouldLog) {
+            results.forEach((r, i) => {
+                if (r.status === 'fulfilled') {
+                    console.log('[AG Auto]   ✅ ' + ACCEPT_COMMANDS[i] + ' → OK');
+                } else {
+                    console.log('[AG Auto]   ❌ ' + ACCEPT_COMMANDS[i] + ' → ' + (r.reason?.message || r.reason));
+                }
+            });
+        }
     }, clickMs);
 
     // Auto-scroll
