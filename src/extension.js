@@ -801,20 +801,14 @@ function updateStatusBarItem() {
 function activate(context) {
     console.log('[AG Auto] Extension đang khởi động (v2.0.0)...');
 
-    // ---- Auto inject script khi khởi động (cho auto-scroll) ----
+    // ---- Always inject script (script handles ON/OFF via config JSON polling) ----
     try {
-        const config = vscode.workspace.getConfiguration('ag-auto');
-        const enabled = config.get('enabled', true);
-        if (enabled) {
-            console.log('[AG Auto] Auto-inject đang bật, thử inject script...');
-            const success = installScript(context);
-            if (success) {
-                console.log('[AG Auto] ✅ Auto-inject thành công khi khởi động!');
-            } else {
-                console.log('[AG Auto] ⚠️ Auto-inject thất bại khi khởi động');
-            }
+        console.log('[AG Auto] Inject script (live ON/OFF via config polling)...');
+        const success = installScript(context);
+        if (success) {
+            console.log('[AG Auto] ✅ Script injected!');
         } else {
-            console.log('[AG Auto] Extension đang TẮT, bỏ qua inject.');
+            console.log('[AG Auto] ⚠️ Inject thất bại');
         }
     } catch (e) {
         console.error('[AG Auto] Lỗi auto-inject:', e.message);
