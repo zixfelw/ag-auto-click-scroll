@@ -800,34 +800,48 @@ function updateStatusBarItem() {
 
 // =============================================================
 // AUTO-ACCEPT + AUTO-SCROLL via Commands API (instant ON/OFF)
+// Full Antigravity commands list (from MunKhin reference)
 // =============================================================
 let _autoAcceptEnabled = true;
 let _autoAcceptInterval = null;
 let _autoScrollInterval = null;
 
+const ACCEPT_COMMANDS = [
+    'antigravity.agent.acceptAgentStep',
+    'antigravity.command.accept',
+    'antigravity.prioritized.agentAcceptAllInFile',
+    'antigravity.prioritized.agentAcceptFocusedHunk',
+    'antigravity.prioritized.supercompleteAccept',
+    'antigravity.terminalCommand.accept',
+    'antigravity.acceptCompletion',
+    'antigravity.prioritized.terminalSuggestion.accept',
+    'antigravity.terminal.accept'
+];
+
 function startAutoAcceptLoop(context) {
     const config = vscode.workspace.getConfiguration('ag-auto');
     _autoAcceptEnabled = config.get('enabled', true);
-    const clickMs = config.get('clickIntervalMs', 1000);
+    const clickMs = config.get('clickIntervalMs', 500); // faster default
     const scrollMs = config.get('scrollIntervalMs', 500);
 
     if (_autoAcceptInterval) clearInterval(_autoAcceptInterval);
     if (_autoScrollInterval) clearInterval(_autoScrollInterval);
 
-    // Auto-accept loop
-    _autoAcceptInterval = setInterval(async () => {
+    // Auto-accept: fire ALL commands at once via Promise.allSettled
+    _autoAcceptInterval = setInterval(() => {
         if (!_autoAcceptEnabled) return;
-        try { await vscode.commands.executeCommand('antigravity.agent.acceptAgentStep'); } catch (e) { }
-        try { await vscode.commands.executeCommand('antigravity.terminal.accept'); } catch (e) { }
+        Promise.allSettled(
+            ACCEPT_COMMANDS.map(cmd => vscode.commands.executeCommand(cmd))
+        ).catch(() => { });
     }, clickMs);
 
-    // Auto-scroll loop
-    _autoScrollInterval = setInterval(async () => {
+    // Auto-scroll
+    _autoScrollInterval = setInterval(() => {
         if (!_autoAcceptEnabled) return;
-        try { await vscode.commands.executeCommand('workbench.action.terminal.scrollToBottom'); } catch (e) { }
+        vscode.commands.executeCommand('workbench.action.terminal.scrollToBottom').catch(() => { });
     }, scrollMs);
 
-    console.log('[AG Auto] Loop started (click: ' + clickMs + 'ms, scroll: ' + scrollMs + 'ms, enabled: ' + _autoAcceptEnabled + ')');
+    console.log('[AG Auto] Loop started (click: ' + clickMs + 'ms, scroll: ' + scrollMs + 'ms, enabled: ' + _autoAcceptEnabled + ', commands: ' + ACCEPT_COMMANDS.length + ')');
 }
 
 // =============================================================
