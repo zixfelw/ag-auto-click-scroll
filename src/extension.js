@@ -828,20 +828,18 @@ function startAutoAcceptLoop(context) {
 // EXTENSION ACTIVATION
 // =============================================================
 function activate(context) {
-    console.log('[AG Auto] Extension đang khởi động (v4.14.0)...');
+    console.log('[AG Auto] Extension đang khởi động (v4.16.0)...');
 
-    // ---- Inject script vào workbench cho auto-scroll ----
+    // ---- GỠ script cũ khỏi workbench (nếu có) ----
     try {
-        console.log('[AG Auto] Inject script cho auto-scroll...');
-        installScript(context);
-    } catch (e) {
-        console.error('[AG Auto] Lỗi inject:', e.message);
-    }
+        uninstallScript();
+        console.log('[AG Auto] Đã gỡ script injection cũ khỏi workbench');
+    } catch (e) { }
 
-    // ---- Auto-Accept via Commands API (instant ON/OFF) ----
+    // ---- Auto-Accept via Commands API (instant ON/OFF, like pesosz) ----
     startAutoAcceptLoop(context);
 
-    // Write config JSON at startup for workbench script config
+    // Write config JSON (for reference)
     writeConfigJson(context);
 
     // ---- Status Bar Button ----
