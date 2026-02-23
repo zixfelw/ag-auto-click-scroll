@@ -323,48 +323,18 @@ function openSettingsPanel(context) {
 
 
             writeConfigJson(context);
+
+            // INSTANT ON/OFF toggle for auto-accept (Commands API)
+            _autoAcceptEnabled = msg.data.enabled;
+            console.log('[AG Auto] Auto-accept ' + (_autoAcceptEnabled ? 'ON ✅' : 'OFF 🛑'));
+
             updateStatusBarItem();
 
             const updatedLang = msg.data.language;
-
-            // Check: script đã inject vào workbench chưa?
-            const wbPath = getWorkbenchPath();
-            let alreadyInjected = false;
-            if (wbPath) {
-                try {
-                    const wbDir = path.dirname(wbPath);
-                    const jsFiles = fs.readdirSync(wbDir).filter(f => f.endsWith('.js'));
-                    for (const jsFile of jsFiles) {
-                        const content = fs.readFileSync(path.join(wbDir, jsFile), 'utf8');
-                        if (content.includes('AG-AUTO-CLICK-SCROLL-JS-START')) {
-                            alreadyInjected = true;
-                            break;
-                        }
-                    }
-                } catch (e) { }
-            }
-
-            if (alreadyInjected) {
-                // Script ĐÃ inject → config file polling sẽ áp dụng changes (ON/OFF + patterns)
-                // KHÔNG cần reload! Thông báo auto-dismiss sau 3 giây
-                let savedMsg = '$(check) [AG Auto] ✅ Đã lưu! Áp dụng tự động trong 2 giây.';
-                if (updatedLang === 'en') savedMsg = '$(check) [AG Auto] ✅ Saved! Applied automatically in 2 seconds.';
-                if (updatedLang === 'zh') savedMsg = '$(check) [AG Auto] ✅ 已保存！2秒内自动应用。';
-                vscode.window.setStatusBarMessage(savedMsg, 3000);
-            } else if (msg.data.enabled) {
-                // Lần đầu: chưa inject → inject + reload
-                installScript(context);
-                let reloadMsg = '[AG Auto] ✅ Đã lưu! VS Code sẽ tự reload trong 1 giây...';
-                if (updatedLang === 'en') reloadMsg = '[AG Auto] ✅ Saved! VS Code will auto-reload in 1 second...';
-                if (updatedLang === 'zh') reloadMsg = '[AG Auto] ✅ 已保存！VS Code 将在1秒后自动重载...';
-                vscode.window.showInformationMessage(reloadMsg);
-                setTimeout(() => {
-                    vscode.commands.executeCommand('workbench.action.reloadWindow');
-                }, 1000);
-            } else {
-                // Tắt lần đầu khi chưa inject → chỉ save config
-                vscode.window.setStatusBarMessage('$(check) [AG Auto] ✅ Đã lưu!', 3000);
-            }
+            let savedMsg = '$(check) [AG Auto] ✅ Đã lưu!';
+            if (updatedLang === 'en') savedMsg = '$(check) [AG Auto] ✅ Saved!';
+            if (updatedLang === 'zh') savedMsg = '$(check) [AG Auto] ✅ 已保存！';
+            vscode.window.setStatusBarMessage(savedMsg, 3000);
         }
     }, undefined, context.subscriptions);
 }
@@ -796,27 +766,49 @@ function updateStatusBarItem() {
 }
 
 // =============================================================
+// AUTO-ACCEPT via Commands API (runs in Extension Host, instant ON/OFF)
+// =============================================================
+let _autoAcceptEnabled = true;
+let _autoAcceptInterval = null;
+
+function startAutoAcceptLoop(context) {
+    const config = vscode.workspace.getConfiguration('ag-auto');
+    _autoAcceptEnabled = config.get('enabled', true);
+    const clickMs = config.get('clickIntervalMs', 1000);
+
+    if (_autoAcceptInterval) clearInterval(_autoAcceptInterval);
+
+    _autoAcceptInterval = setInterval(async () => {
+        if (!_autoAcceptEnabled) return;
+        try {
+            await vscode.commands.executeCommand('antigravity.agent.acceptAgentStep');
+        } catch (e) { }
+        try {
+            await vscode.commands.executeCommand('antigravity.terminal.accept');
+        } catch (e) { }
+    }, clickMs);
+
+    console.log('[AG Auto] Auto-accept loop started (interval: ' + clickMs + 'ms, enabled: ' + _autoAcceptEnabled + ')');
+}
+
+// =============================================================
 // EXTENSION ACTIVATION
 // =============================================================
 function activate(context) {
-    console.log('[AG Auto] Extension đang khởi động (v2.0.0)...');
+    console.log('[AG Auto] Extension đang khởi động (v4.14.0)...');
 
-    // ---- Always inject script (script handles ON/OFF via config JSON polling) ----
+    // ---- Inject script vào workbench cho auto-scroll ----
     try {
-        console.log('[AG Auto] Inject script (live ON/OFF via config polling)...');
-        const success = installScript(context);
-        if (success) {
-            console.log('[AG Auto] ✅ Script injected!');
-        } else {
-            console.log('[AG Auto] ⚠️ Inject thất bại');
-        }
+        console.log('[AG Auto] Inject script cho auto-scroll...');
+        installScript(context);
     } catch (e) {
-        console.error('[AG Auto] Lỗi auto-inject:', e.message);
+        console.error('[AG Auto] Lỗi inject:', e.message);
     }
 
-    // Auto-Accept via Commands API removed - workbench.js handles patterns
+    // ---- Auto-Accept via Commands API (instant ON/OFF) ----
+    startAutoAcceptLoop(context);
 
-    // Write config JSON at startup for realtime reload
+    // Write config JSON at startup for workbench script config
     writeConfigJson(context);
 
     // ---- Status Bar Button ----
