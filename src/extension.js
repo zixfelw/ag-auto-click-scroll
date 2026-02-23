@@ -799,29 +799,35 @@ function updateStatusBarItem() {
 }
 
 // =============================================================
-// AUTO-ACCEPT via Commands API (runs in Extension Host, instant ON/OFF)
+// AUTO-ACCEPT + AUTO-SCROLL via Commands API (instant ON/OFF)
 // =============================================================
 let _autoAcceptEnabled = true;
 let _autoAcceptInterval = null;
+let _autoScrollInterval = null;
 
 function startAutoAcceptLoop(context) {
     const config = vscode.workspace.getConfiguration('ag-auto');
     _autoAcceptEnabled = config.get('enabled', true);
     const clickMs = config.get('clickIntervalMs', 1000);
+    const scrollMs = config.get('scrollIntervalMs', 500);
 
     if (_autoAcceptInterval) clearInterval(_autoAcceptInterval);
+    if (_autoScrollInterval) clearInterval(_autoScrollInterval);
 
+    // Auto-accept loop
     _autoAcceptInterval = setInterval(async () => {
         if (!_autoAcceptEnabled) return;
-        try {
-            await vscode.commands.executeCommand('antigravity.agent.acceptAgentStep');
-        } catch (e) { }
-        try {
-            await vscode.commands.executeCommand('antigravity.terminal.accept');
-        } catch (e) { }
+        try { await vscode.commands.executeCommand('antigravity.agent.acceptAgentStep'); } catch (e) { }
+        try { await vscode.commands.executeCommand('antigravity.terminal.accept'); } catch (e) { }
     }, clickMs);
 
-    console.log('[AG Auto] Auto-accept loop started (interval: ' + clickMs + 'ms, enabled: ' + _autoAcceptEnabled + ')');
+    // Auto-scroll loop
+    _autoScrollInterval = setInterval(async () => {
+        if (!_autoAcceptEnabled) return;
+        try { await vscode.commands.executeCommand('workbench.action.terminal.scrollToBottom'); } catch (e) { }
+    }, scrollMs);
+
+    console.log('[AG Auto] Loop started (click: ' + clickMs + 'ms, scroll: ' + scrollMs + 'ms, enabled: ' + _autoAcceptEnabled + ')');
 }
 
 // =============================================================
