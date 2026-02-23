@@ -11,40 +11,34 @@
     var SCROLL_INTERVAL_MS = /*{{SCROLL_INTERVAL_MS}}*/500;
     var CLICK_PATTERNS = /*{{CLICK_PATTERNS}}*/["Allow", "Always Allow", "Run", "Keep Waiting", "Accept all"];
 
-    // Live ON/OFF flag — controlled via config JSON polling, no reload needed
+    // Live ON/OFF flag — controlled via config file polling, no reload needed
     var _agEnabled = /*{{ENABLED}}*/true;
 
-    // --- Dynamic config reload (always runs, even when disabled) ---
-    var _agConfigUrl = null;
-    try {
-        var scripts = document.querySelectorAll('script[src*="ag-auto"]');
-        if (scripts.length > 0) {
-            _agConfigUrl = scripts[0].src.replace(/ag-auto-script\.js.*/, 'ag-auto-config.json');
-        }
-    } catch (e) { }
-    if (!_agConfigUrl) _agConfigUrl = 'ag-auto-config.json';
+    // --- Dynamic config reload via Node.js fs (bypasses CSP) ---
+    var _agConfigPath = '/*{{CONFIG_PATH}}*/';
+    var _agFs = null;
+    try { _agFs = require('fs'); } catch (e) { }
 
     var _agConfigReload = setInterval(function () {
+        if (!_agFs || !_agConfigPath) return;
         try {
-            fetch(_agConfigUrl + '?t=' + Date.now()).then(function (r) {
-                if (r.ok) return r.json(); return null;
-            }).then(function (cfg) {
-                if (cfg) {
-                    if (cfg.clickPatterns && Array.isArray(cfg.clickPatterns)) CLICK_PATTERNS = cfg.clickPatterns;
-                    if (cfg.pauseScrollMs) PAUSE_SCROLL_MS = cfg.pauseScrollMs;
-                    if (cfg.scrollIntervalMs) SCROLL_INTERVAL_MS = cfg.scrollIntervalMs;
-                    if (cfg.clickIntervalMs) CLICK_INTERVAL_MS = cfg.clickIntervalMs;
-                    // Live ON/OFF toggle
-                    if (typeof cfg.enabled === 'boolean') {
-                        if (_agEnabled !== cfg.enabled) {
-                            console.log('[AG Auto] ' + (cfg.enabled ? '✅ BẬT' : '❌ TẮT') + ' (live toggle, no reload)');
-                        }
-                        _agEnabled = cfg.enabled;
+            var raw = _agFs.readFileSync(_agConfigPath, 'utf8');
+            var cfg = JSON.parse(raw);
+            if (cfg) {
+                if (cfg.clickPatterns && Array.isArray(cfg.clickPatterns)) CLICK_PATTERNS = cfg.clickPatterns;
+                if (cfg.pauseScrollMs) PAUSE_SCROLL_MS = cfg.pauseScrollMs;
+                if (cfg.scrollIntervalMs) SCROLL_INTERVAL_MS = cfg.scrollIntervalMs;
+                if (cfg.clickIntervalMs) CLICK_INTERVAL_MS = cfg.clickIntervalMs;
+                // Live ON/OFF toggle
+                if (typeof cfg.enabled === 'boolean') {
+                    if (_agEnabled !== cfg.enabled) {
+                        console.log('[AG Auto] ' + (cfg.enabled ? '✅ BẬT' : '❌ TẮT') + ' (live toggle, no reload)');
                     }
+                    _agEnabled = cfg.enabled;
                 }
-            }).catch(function () { });
+            }
         } catch (e) { }
-    }, 3000);
+    }, 2000);
     window._agToolIntervals.push(_agConfigReload);
 
     let lastManualScrollTime = 0;
