@@ -26,7 +26,6 @@
         try {
             var xhr = new XMLHttpRequest();
             xhr.open('GET', 'http://127.0.0.1:' + AG_HTTP_PORT + '/ag-status', false); // sync
-            xhr.timeout = 500;
             xhr.send();
             if (xhr.status === 200) {
                 var cfg = JSON.parse(xhr.responseText);
@@ -41,7 +40,6 @@
                 // Try alternate port
                 var xhr2 = new XMLHttpRequest();
                 xhr2.open('GET', 'http://127.0.0.1:' + (AG_HTTP_PORT + 1) + '/ag-status', false);
-                xhr2.timeout = 500;
                 xhr2.send();
                 if (xhr2.status === 200) {
                     var cfg2 = JSON.parse(xhr2.responseText);
