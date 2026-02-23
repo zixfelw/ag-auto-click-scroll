@@ -15,68 +15,67 @@
     var SCROLL_INTERVAL_MS = /*{{SCROLL_INTERVAL_MS}}*/500;
     var CLICK_PATTERNS = /*{{CLICK_PATTERNS}}*/["Allow", "Always Allow", "Run", "Keep Waiting", "Accept all"];
 
-    // Live ON/OFF flag — controlled via config file polling, no reload needed
-    var _agEnabled = /*{{ENABLED}}*/true;
+    // Live ON/OFF flag — exposed on window for all scopes + DevTools access
+    window._agAutoEnabled = /*{{ENABLED}}*/true;
 
-    // --- Dynamic config reload (multiple fallback methods) ---
+    // --- Config file path + fs module (captured in closure at startup) ---
     var _agConfigPath = '/*{{CONFIG_PATH}}*/';
-
-    // Try to get Node.js fs module (multiple methods for different Electron configs)
     var _agFs = null;
     try { _agFs = require('fs'); } catch (e) { }
     if (!_agFs) try { _agFs = globalThis.__non_webpack_require__('fs'); } catch (e) { }
-    if (!_agFs) try { _agFs = globalThis.nodeRequire('fs'); } catch (e) { }
 
     console.log('[AG Auto] Config path:', _agConfigPath);
-    console.log('[AG Auto] fs module:', _agFs ? 'loaded ✅' : 'not available, using XHR');
+    console.log('[AG Auto] fs module:', _agFs ? 'loaded ✅' : 'NOT available ❌');
 
-    function _agReadConfig() {
-        // Method 1: Node.js fs (fastest, most reliable if available)
-        if (_agFs) {
-            try {
-                return JSON.parse(_agFs.readFileSync(_agConfigPath, 'utf8'));
-            } catch (e) { }
-        }
-        // Method 2: Synchronous XMLHttpRequest to file:// (works in Electron)
+    // Test read at startup
+    if (_agFs) {
         try {
-            var xhr = new XMLHttpRequest();
-            xhr.open('GET', 'file:///' + _agConfigPath.replace(/\\/g, '/'), false);
-            xhr.send();
-            if (xhr.status === 0 || xhr.status === 200) {
-                return JSON.parse(xhr.responseText);
-            }
-        } catch (e) { }
-        return null;
+            var _testRaw = _agFs.readFileSync(_agConfigPath, 'utf8');
+            var _testCfg = JSON.parse(_testRaw);
+            console.log('[AG Auto] Config test read: OK ✅, enabled=' + _testCfg.enabled);
+            if (typeof _testCfg.enabled === 'boolean') window._agAutoEnabled = _testCfg.enabled;
+        } catch (e) {
+            console.log('[AG Auto] Config test read: FAILED ❌', e.message);
+        }
     }
 
-    // Test config read immediately
-    var _agTestCfg = _agReadConfig();
-    console.log('[AG Auto] Config test read:', _agTestCfg ? 'OK ✅' : 'FAILED ❌');
-
+    // --- Config polling (reads file every 2s using captured _agFs) ---
+    var _agPollCount = 0;
     var _agConfigReload = setInterval(function () {
-        if (!_agConfigPath) return;
-        var cfg = _agReadConfig();
-        if (cfg) {
+        _agPollCount++;
+        try {
+            if (!_agFs) {
+                if (_agPollCount <= 2) console.log('[AG Auto] Poll: fs unavailable');
+                return;
+            }
+            var raw = _agFs.readFileSync(_agConfigPath, 'utf8');
+            var cfg = JSON.parse(raw);
+            if (!cfg) return;
+
             if (cfg.clickPatterns && Array.isArray(cfg.clickPatterns)) CLICK_PATTERNS = cfg.clickPatterns;
             if (cfg.pauseScrollMs) PAUSE_SCROLL_MS = cfg.pauseScrollMs;
             if (cfg.scrollIntervalMs) SCROLL_INTERVAL_MS = cfg.scrollIntervalMs;
             if (cfg.clickIntervalMs) CLICK_INTERVAL_MS = cfg.clickIntervalMs;
-            // Live ON/OFF toggle
+
             if (typeof cfg.enabled === 'boolean') {
-                if (_agEnabled !== cfg.enabled) {
-                    console.log('[AG Auto] ' + (cfg.enabled ? '✅ BẬT' : '❌ TẮT') + ' (live toggle, no reload)');
+                if (window._agAutoEnabled !== cfg.enabled) {
+                    console.log('[AG Auto] ' + (cfg.enabled ? '✅ BẬT' : '❌ TẮT') + ' (live toggle)');
                 }
-                _agEnabled = cfg.enabled;
+                window._agAutoEnabled = cfg.enabled;
             }
+
+            if (_agPollCount <= 2) console.log('[AG Auto] Poll #' + _agPollCount + ' OK, enabled=' + window._agAutoEnabled);
+        } catch (e) {
+            if (_agPollCount <= 5) console.log('[AG Auto] Poll #' + _agPollCount + ' error:', e.message);
         }
     }, 2000);
     window._agToolIntervals.push(_agConfigReload);
 
-    let lastManualScrollTime = 0;
-    let isAutoScrolling = false;
+    var lastManualScrollTime = 0;
+    var isAutoScrolling = false;
 
     // =================================================================
-    // CORE FIX: Only click APPROVAL buttons (NOT random UI buttons)
+    // Only click APPROVAL buttons (NOT random UI buttons)
     // =================================================================
     var REJECT_WORDS = ['Reject', 'Deny', 'Cancel', 'Dismiss', 'Don\'t Allow', 'Decline'];
 
@@ -104,29 +103,41 @@
     var _clicked = new WeakSet();
 
     // --- 1. AUTO CLICK ---
-    let autoClick = setInterval(() => {
-        if (!_agEnabled) return; // Live OFF check
+    var autoClick = setInterval(function () {
+        if (!window._agAutoEnabled) return;
 
-        let clickables = Array.from(document.querySelectorAll('button, a.action-label, [role="button"], .monaco-button'));
-        document.querySelectorAll('span.cursor-pointer').forEach(s => clickables.push(s));
-        let targetBtn = clickables.find(b => {
-            if (b.offsetParent === null) return false;
-            if (_clicked.has(b)) return false;
+        var clickables = Array.from(document.querySelectorAll('button, a.action-label, [role="button"], .monaco-button'));
+        document.querySelectorAll('span.cursor-pointer').forEach(function (s) { clickables.push(s); });
+        var targetBtn = null;
+        for (var i = 0; i < clickables.length; i++) {
+            var b = clickables[i];
+            if (b.offsetParent === null) continue;
+            if (_clicked.has(b)) continue;
 
-            let text = (b.innerText || b.textContent || '').trim();
-            if (!text || text.length > 40) return false;
+            var text = (b.innerText || b.textContent || '').trim();
+            if (!text || text.length > 40) continue;
 
-            let matchesPattern = CLICK_PATTERNS.some(p =>
-                text === p || text.startsWith(p)
-            );
-            if (!matchesPattern) return false;
+            var matchesPattern = false;
+            for (var p = 0; p < CLICK_PATTERNS.length; p++) {
+                if (text === CLICK_PATTERNS[p] || text.indexOf(CLICK_PATTERNS[p]) === 0) {
+                    matchesPattern = true;
+                    break;
+                }
+            }
+            if (!matchesPattern) continue;
 
-            if (b.tagName === 'SPAN' && b.classList.contains('cursor-pointer')) return true;
-            return isApprovalButton(b);
-        });
+            if (b.tagName === 'SPAN' && b.classList.contains('cursor-pointer')) {
+                targetBtn = b;
+                break;
+            }
+            if (isApprovalButton(b)) {
+                targetBtn = b;
+                break;
+            }
+        }
 
         if (targetBtn) {
-            console.log("[AG Auto] 🎯 Approval-Click: [" + targetBtn.innerText.trim() + "]");
+            console.log("[AG Auto] 🎯 Click: [" + targetBtn.innerText.trim() + "]");
             _clicked.add(targetBtn);
             targetBtn.click();
         }
@@ -136,7 +147,7 @@
     // --- 2. THEO DÕI CUỘN TAY ---
     window._agScrollListener = function (e) {
         if (!isAutoScrolling && e.isTrusted) {
-            let el = e.target;
+            var el = e.target;
             if (el && el.nodeType === 1) {
                 if (!el.closest('.monaco-editor') && !el.closest('.part.editor')) {
                     lastManualScrollTime = Date.now();
@@ -147,15 +158,15 @@
     window.addEventListener('scroll', window._agScrollListener, true);
 
     // --- 3. AUTO SCROLL ---
-    let autoScroll = setInterval(() => {
-        if (!_agEnabled) return; // Live OFF check
+    var autoScroll = setInterval(function () {
+        if (!window._agAutoEnabled) return;
 
-        let now = Date.now();
+        var now = Date.now();
         if (now - lastManualScrollTime < PAUSE_SCROLL_MS) return;
 
-        let scrollables = Array.from(document.querySelectorAll('*')).filter(el => {
-            let style = window.getComputedStyle(el);
-            let hasScrollbar = el.scrollHeight > el.clientHeight &&
+        var scrollables = Array.from(document.querySelectorAll('*')).filter(function (el) {
+            var style = window.getComputedStyle(el);
+            var hasScrollbar = el.scrollHeight > el.clientHeight &&
                 (style.overflowY === 'auto' || style.overflowY === 'scroll');
             if (!hasScrollbar) return false;
             if (el.closest('.monaco-editor') || el.closest('.part.editor')) return false;
@@ -165,16 +176,16 @@
 
         if (scrollables.length > 0) {
             isAutoScrolling = true;
-            scrollables.forEach(el => {
+            scrollables.forEach(function (el) {
                 if (el.scrollHeight - el.scrollTop - el.clientHeight > 5) {
                     el.scrollTop = el.scrollHeight;
                 }
             });
-            setTimeout(() => { isAutoScrolling = false; }, 50);
+            setTimeout(function () { isAutoScrolling = false; }, 50);
         }
 
     }, SCROLL_INTERVAL_MS);
     window._agToolIntervals.push(autoScroll);
 
-    console.log("[AG Auto] 🚀 v4.8.0 | Live ON/OFF toggle | Patterns:", JSON.stringify(CLICK_PATTERNS));
+    console.log("[AG Auto] 🚀 v4.12 | Live toggle via window._agAutoEnabled | Patterns:", JSON.stringify(CLICK_PATTERNS));
 })();
