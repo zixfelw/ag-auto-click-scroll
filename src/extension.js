@@ -97,7 +97,14 @@ function writeConfigJson(context) {
         const allPatterns = config.get('clickPatterns', ['Allow', 'Always Allow', 'Run', 'Keep Waiting']);
         const disabledPats = context.globalState.get('disabledClickPatterns', []);
         const activePatterns = allPatterns.filter(p => !disabledPats.includes(p));
-        const configData = JSON.stringify({ clickPatterns: activePatterns });
+        const enabled = config.get('enabled', true);
+        const configData = JSON.stringify({
+            enabled: enabled,
+            clickPatterns: activePatterns,
+            pauseScrollMs: config.get('scrollPauseMs', 7000),
+            scrollIntervalMs: config.get('scrollIntervalMs', 500),
+            clickIntervalMs: config.get('clickIntervalMs', 1000)
+        });
         const configPath = path.join(wbDir, 'ag-auto-config.json');
         fs.writeFileSync(configPath, configData, 'utf8');
         console.log('[AG Auto] Config JSON updated:', configData);
@@ -311,30 +318,51 @@ function openSettingsPanel(context) {
 
 
             writeConfigJson(context);
-
-            if (msg.data.enabled) {
-                // Bật: inject script mới với config đã cập nhật
-                installScript(context);
-            } else {
-                // Tắt: gỡ script khỏi workbench.html luôn
-                uninstallScript();
-            }
-
             updateStatusBarItem();
 
-            // Lấy lại config để đảm bảo đã save
             const updatedLang = msg.data.language;
 
-            // Tự động reload VS Code sau 1 giây để áp dụng ngay
-            let reloadMsg = '[AG Auto] ✅ Đã lưu! VS Code sẽ tự reload trong 1 giây...';
-            if (updatedLang === 'en') reloadMsg = '[AG Auto] ✅ Saved! VS Code will auto-reload in 1 second...';
-            if (updatedLang === 'zh') reloadMsg = '[AG Auto] ✅ 已保存！VS Code 将在1秒后自动重载...';
+            // Check: script đã inject vào workbench chưa?
+            const wbPath = getWorkbenchPath();
+            let alreadyInjected = false;
+            if (wbPath) {
+                try {
+                    const wbDir = path.dirname(wbPath);
+                    const jsFiles = fs.readdirSync(wbDir).filter(f => f.endsWith('.js'));
+                    for (const jsFile of jsFiles) {
+                        const content = fs.readFileSync(path.join(wbDir, jsFile), 'utf8');
+                        if (content.includes('AG-AUTO-CLICK-SCROLL-JS-START')) {
+                            alreadyInjected = true;
+                            break;
+                        }
+                    }
+                } catch (e) { }
+            }
 
-            vscode.window.showInformationMessage(reloadMsg);
-
-            setTimeout(() => {
-                vscode.commands.executeCommand('workbench.action.reloadWindow');
-            }, 1000);
+            if (alreadyInjected) {
+                // Script ĐÃ inject → config JSON polling sẽ áp dụng changes (ON/OFF + patterns)
+                // KHÔNG cần reload!
+                let savedMsg = '[AG Auto] ✅ Đã lưu! Áp dụng tự động trong 3 giây.';
+                if (updatedLang === 'en') savedMsg = '[AG Auto] ✅ Saved! Applied automatically in 3 seconds.';
+                if (updatedLang === 'zh') savedMsg = '[AG Auto] ✅ 已保存！3秒内自动应用。';
+                vscode.window.showInformationMessage(savedMsg);
+            } else if (msg.data.enabled) {
+                // Lần đầu: chưa inject → inject + reload
+                installScript(context);
+                let reloadMsg = '[AG Auto] ✅ Đã lưu! VS Code sẽ tự reload trong 1 giây...';
+                if (updatedLang === 'en') reloadMsg = '[AG Auto] ✅ Saved! VS Code will auto-reload in 1 second...';
+                if (updatedLang === 'zh') reloadMsg = '[AG Auto] ✅ 已保存！VS Code 将在1秒后自动重载...';
+                vscode.window.showInformationMessage(reloadMsg);
+                setTimeout(() => {
+                    vscode.commands.executeCommand('workbench.action.reloadWindow');
+                }, 1000);
+            } else {
+                // Tắt lần đầu khi chưa inject → chỉ save config
+                let savedMsg = '[AG Auto] ✅ Đã lưu!';
+                if (updatedLang === 'en') savedMsg = '[AG Auto] ✅ Saved!';
+                if (updatedLang === 'zh') savedMsg = '[AG Auto] ✅ 已保存！';
+                vscode.window.showInformationMessage(savedMsg);
+            }
         }
     }, undefined, context.subscriptions);
 }

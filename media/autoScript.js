@@ -10,11 +10,11 @@
     var CLICK_INTERVAL_MS = /*{{CLICK_INTERVAL_MS}}*/1000;
     var SCROLL_INTERVAL_MS = /*{{SCROLL_INTERVAL_MS}}*/500;
     var CLICK_PATTERNS = /*{{CLICK_PATTERNS}}*/["Allow", "Always Allow", "Run", "Keep Waiting", "Accept all"];
-    const ENABLED = /*{{ENABLED}}*/true;
 
-    if (!ENABLED) return;
+    // Live ON/OFF flag — controlled via config JSON polling, no reload needed
+    var _agEnabled = /*{{ENABLED}}*/true;
 
-    // --- Dynamic config reload ---
+    // --- Dynamic config reload (always runs, even when disabled) ---
     var _agConfigUrl = null;
     try {
         var scripts = document.querySelectorAll('script[src*="ag-auto"]');
@@ -34,10 +34,17 @@
                     if (cfg.pauseScrollMs) PAUSE_SCROLL_MS = cfg.pauseScrollMs;
                     if (cfg.scrollIntervalMs) SCROLL_INTERVAL_MS = cfg.scrollIntervalMs;
                     if (cfg.clickIntervalMs) CLICK_INTERVAL_MS = cfg.clickIntervalMs;
+                    // Live ON/OFF toggle
+                    if (typeof cfg.enabled === 'boolean') {
+                        if (_agEnabled !== cfg.enabled) {
+                            console.log('[AG Auto] ' + (cfg.enabled ? '✅ BẬT' : '❌ TẮT') + ' (live toggle, no reload)');
+                        }
+                        _agEnabled = cfg.enabled;
+                    }
                 }
             }).catch(function () { });
         } catch (e) { }
-    }, 5000);
+    }, 3000);
     window._agToolIntervals.push(_agConfigReload);
 
     let lastManualScrollTime = 0;
@@ -45,21 +52,12 @@
 
     // =================================================================
     // CORE FIX: Only click APPROVAL buttons (NOT random UI buttons)
-    //
-    // Approval buttons are identified by:
-    // 1. Must match a pattern (Run, Allow, etc.)  
-    // 2. Must have a SIBLING rejection button nearby (Reject, Deny, Cancel, etc.)
-    //    This guarantees it's part of an approval dialog, not random UI
-    // 3. Must be VISIBLE
     // =================================================================
     var REJECT_WORDS = ['Reject', 'Deny', 'Cancel', 'Dismiss', 'Don\'t Allow', 'Decline'];
 
     function isApprovalButton(btn) {
-        // Get the parent container of this button
         var parent = btn.parentElement;
         if (!parent) return false;
-
-        // Search up to 3 levels up for sibling rejection elements
         for (var level = 0; level < 3; level++) {
             if (!parent) break;
             var siblingBtns = parent.querySelectorAll('button, a.action-label, [role="button"], .monaco-button, span.bg-ide-button-background');
@@ -67,10 +65,9 @@
                 var sib = siblingBtns[i];
                 if (sib === btn) continue;
                 var sibText = (sib.innerText || '').trim();
-                // Check if sibling is a rejection button
                 for (var j = 0; j < REJECT_WORDS.length; j++) {
                     if (sibText === REJECT_WORDS[j] || sibText.startsWith(REJECT_WORDS[j])) {
-                        return true; // Has a reject sibling = real approval dialog!
+                        return true;
                     }
                 }
             }
@@ -79,33 +76,27 @@
         return false;
     }
 
-    // Track clicked buttons to avoid double-click
     var _clicked = new WeakSet();
 
-    // --- 1. AUTO CLICK (only approval buttons with reject sibling) ---
+    // --- 1. AUTO CLICK ---
     let autoClick = setInterval(() => {
-        let buttons = Array.from(document.querySelectorAll('button'));
-        // Search buttons, action-links, AND clickable spans (Accept all is a <span> with Tailwind classes)
+        if (!_agEnabled) return; // Live OFF check
+
         let clickables = Array.from(document.querySelectorAll('button, a.action-label, [role="button"], .monaco-button'));
-        // Also find clickable spans (cursor-pointer = clickable)
         document.querySelectorAll('span.cursor-pointer').forEach(s => clickables.push(s));
         let targetBtn = clickables.find(b => {
-            if (b.offsetParent === null) return false;     // hidden
-            if (_clicked.has(b)) return false;              // already clicked
+            if (b.offsetParent === null) return false;
+            if (_clicked.has(b)) return false;
 
             let text = (b.innerText || b.textContent || '').trim();
-            if (!text || text.length > 40) return false;    // empty or too long
+            if (!text || text.length > 40) return false;
 
-            // Must match a pattern
             let matchesPattern = CLICK_PATTERNS.some(p =>
                 text === p || text.startsWith(p)
             );
             if (!matchesPattern) return false;
 
-            // Clickable spans (cursor-pointer) are action buttons, skip pair check
             if (b.tagName === 'SPAN' && b.classList.contains('cursor-pointer')) return true;
-
-            // For regular buttons: must be an approval button (has reject sibling)
             return isApprovalButton(b);
         });
 
@@ -132,6 +123,8 @@
 
     // --- 3. AUTO SCROLL ---
     let autoScroll = setInterval(() => {
+        if (!_agEnabled) return; // Live OFF check
+
         let now = Date.now();
         if (now - lastManualScrollTime < PAUSE_SCROLL_MS) return;
 
@@ -158,5 +151,5 @@
     }, SCROLL_INTERVAL_MS);
     window._agToolIntervals.push(autoScroll);
 
-    console.log("[AG Auto] 🚀 v3.6.0 | Only clicking APPROVAL buttons (with Reject sibling) | Patterns:", JSON.stringify(CLICK_PATTERNS));
+    console.log("[AG Auto] 🚀 v4.8.0 | Live ON/OFF toggle | Patterns:", JSON.stringify(CLICK_PATTERNS));
 })();
