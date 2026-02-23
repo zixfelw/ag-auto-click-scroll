@@ -4,6 +4,68 @@
 const vscode = require('vscode');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
+
+/**
+ * Cập nhật checksums trong product.json sau khi inject
+ * để tránh cảnh báo "Your installation appears to be corrupt"
+ */
+function fixChecksums(modifiedFiles) {
+    try {
+        const appRoot = vscode.env.appRoot;
+        const productPath = path.join(appRoot, 'product.json');
+        if (!fs.existsSync(productPath)) {
+            console.log('[AG Auto] product.json không tồn tại, bỏ qua checksum fix');
+            return;
+        }
+
+        const productJson = JSON.parse(fs.readFileSync(productPath, 'utf8'));
+        if (!productJson.checksums) {
+            console.log('[AG Auto] product.json không có checksums, bỏ qua');
+            return;
+        }
+
+        let changed = false;
+        for (const filePath of modifiedFiles) {
+            // Tìm key tương ứng trong checksums (relative path từ appRoot)
+            const relativePath = path.relative(appRoot, filePath).replace(/\\/g, '/');
+            // Tìm key chứa tên file
+            const fileName = path.basename(filePath);
+            let matchKey = null;
+            for (const key of Object.keys(productJson.checksums)) {
+                if (key === relativePath || key.endsWith('/' + fileName) || key === fileName) {
+                    matchKey = key;
+                    break;
+                }
+            }
+            if (!matchKey) {
+                // Thử tìm bằng partial match
+                for (const key of Object.keys(productJson.checksums)) {
+                    if (relativePath.endsWith(key) || key.endsWith(relativePath)) {
+                        matchKey = key;
+                        break;
+                    }
+                }
+            }
+            if (matchKey) {
+                const content = fs.readFileSync(filePath);
+                const hash = crypto.createHash('sha256').update(content).digest('base64').replace(/=+$/, '');
+                productJson.checksums[matchKey] = hash;
+                console.log('[AG Auto] ✅ Checksum updated:', matchKey);
+                changed = true;
+            } else {
+                console.log('[AG Auto] ⚠️ Không tìm thấy checksum key cho:', relativePath);
+            }
+        }
+
+        if (changed) {
+            fs.writeFileSync(productPath, JSON.stringify(productJson, null, '\t'), 'utf8');
+            console.log('[AG Auto] ✅ product.json checksums đã cập nhật!');
+        }
+    } catch (err) {
+        console.error('[AG Auto] Lỗi fix checksums:', err.message);
+    }
+}
 
 // Tag markers để tìm và xoá script đã inject
 const TAG_START = '<!-- AG-AUTO-CLICK-SCROLL-START -->';
@@ -123,6 +185,7 @@ function installScript(context) {
 
     const wbDir = path.dirname(wbPath);
     const scriptContent = buildScriptContent(context);
+    const modifiedFiles = []; // Track files we modify for checksum fix
 
     // ===== Cách 1: Tìm và ghi vào file JS THẬT SỰ được load (bypass CSP hoàn toàn) =====
     const JS_TAG_START = '/* AG-AUTO-CLICK-SCROLL-JS-START */';
@@ -175,6 +238,7 @@ function installScript(context) {
             jsContent += jsInjection;
 
             fs.writeFileSync(jsPath, jsContent, 'utf8');
+            modifiedFiles.push(jsPath);
             console.log('[AG Auto] ✅ Inject vào', path.basename(jsPath), '(bypass CSP)!');
         }
     } catch (err) {
@@ -199,9 +263,15 @@ function installScript(context) {
         html = html.replace('</html>', injection + '\n</html>');
 
         fs.writeFileSync(wbPath, html, 'utf8');
+        modifiedFiles.push(wbPath);
         console.log('[AG Auto] ✅ Inject + cache bust vào workbench.html!');
     } catch (err) {
         console.error('[AG Auto] Lỗi inject vào HTML:', err.message);
+    }
+
+    // ===== Fix checksums để xóa cảnh báo "corrupt installation" =====
+    if (modifiedFiles.length > 0) {
+        fixChecksums(modifiedFiles);
     }
 
     return true;
