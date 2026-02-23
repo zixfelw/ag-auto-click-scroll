@@ -782,16 +782,22 @@ function getSettingsHtml(cfg) {
 // STATUS BAR
 // =============================================================
 let statusBarItem;
+let statusBarScroll;
 
 function createStatusBarItem(context) {
-    statusBarItem = vscode.window.createStatusBarItem(
-        vscode.StatusBarAlignment.Right,
-        100
-    );
+    // Accept item (right side, priority 101 = more left)
+    statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 101);
     statusBarItem.command = 'ag-auto.openSettings';
+    context.subscriptions.push(statusBarItem);
+
+    // Scroll item (right side, priority 100 = more right)
+    statusBarScroll = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+    statusBarScroll.command = 'ag-auto.openSettings';
+    context.subscriptions.push(statusBarScroll);
+
     updateStatusBarItem();
     statusBarItem.show();
-    context.subscriptions.push(statusBarItem);
+    statusBarScroll.show();
 }
 
 function updateStatusBarItem() {
@@ -799,23 +805,17 @@ function updateStatusBarItem() {
     const acceptOn = config.get('enabled', true);
     const scrollOn = config.get('scrollEnabled', true);
 
-    const acceptLabel = acceptOn ? 'Accept ON' : 'Accept OFF';
-    const scrollLabel = scrollOn ? 'Scroll ON' : 'Scroll OFF';
+    // Accept item
+    statusBarItem.text = acceptOn ? '$(check) Accept ON' : '$(circle-slash) Accept OFF';
+    statusBarItem.color = acceptOn ? '#4EC9B0' : '#F44747';
+    statusBarItem.backgroundColor = acceptOn ? undefined : new vscode.ThemeColor('statusBarItem.errorBackground');
+    statusBarItem.tooltip = 'Auto Accept: ' + (acceptOn ? '✅ ON' : '❌ OFF') + '\nClick để mở Settings';
 
-    if (acceptOn && scrollOn) {
-        statusBarItem.text = '$(check) ' + acceptLabel + ' | ' + scrollLabel;
-        statusBarItem.color = '#4EC9B0';
-        statusBarItem.backgroundColor = undefined;
-    } else if (!acceptOn && !scrollOn) {
-        statusBarItem.text = '$(circle-slash) ' + acceptLabel + ' | ' + scrollLabel;
-        statusBarItem.color = '#F44747';
-        statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.errorBackground');
-    } else {
-        statusBarItem.text = '$(warning) ' + acceptLabel + ' | ' + scrollLabel;
-        statusBarItem.color = '#FFCC00';
-        statusBarItem.backgroundColor = undefined;
-    }
-    statusBarItem.tooltip = 'AG Auto Click & Scroll\nAccept: ' + (acceptOn ? '✅ ON' : '❌ OFF') + '\nScroll: ' + (scrollOn ? '✅ ON' : '❌ OFF') + '\nClick để mở Settings';
+    // Scroll item
+    statusBarScroll.text = scrollOn ? '$(check) Scroll ON' : '$(circle-slash) Scroll OFF';
+    statusBarScroll.color = scrollOn ? '#4EC9B0' : '#F44747';
+    statusBarScroll.backgroundColor = scrollOn ? undefined : new vscode.ThemeColor('statusBarItem.errorBackground');
+    statusBarScroll.tooltip = 'Auto Scroll: ' + (scrollOn ? '✅ ON' : '❌ OFF') + '\nClick để mở Settings';
 }
 
 // =============================================================
