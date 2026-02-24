@@ -94,6 +94,9 @@
         return false;
     }
 
+    // Words in buttons that should NEVER be auto-clicked (editor/diff UI buttons)
+    var EDITOR_SKIP_WORDS = ['Accept Changes', 'Accept All', 'Accept Incoming', 'Accept Current', 'Accept Both', 'Accept Combination'];
+
     var _clicked = new WeakSet();
 
     // --- 1. AUTO CLICK ---
@@ -110,6 +113,16 @@
 
             var text = (b.innerText || b.textContent || '').trim();
             if (!text || text.length > 40) continue;
+
+            // Skip diff/merge editor buttons — NEVER click these
+            var skipEditor = false;
+            for (var se = 0; se < EDITOR_SKIP_WORDS.length; se++) {
+                if (text.indexOf(EDITOR_SKIP_WORDS[se]) === 0) { skipEditor = true; break; }
+            }
+            if (skipEditor) continue;
+
+            // Skip buttons inside diff/merge editor containers
+            if (b.closest && (b.closest('.monaco-diff-editor') || b.closest('.merge-editor-view') || b.closest('.inline-merge-region') || b.closest('.merged-editor'))) continue;
 
             var matchesPattern = false;
             for (var p = 0; p < CLICK_PATTERNS.length; p++) {

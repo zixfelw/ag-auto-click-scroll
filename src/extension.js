@@ -4,10 +4,52 @@
 const vscode = require('vscode');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
+const { execSync } = require('child_process');
 
 // Tag markers để tìm và xoá script đã inject
 const TAG_START = '<!-- AG-AUTO-CLICK-SCROLL-START -->';
 const TAG_END = '<!-- AG-AUTO-CLICK-SCROLL-END -->';
+
+/**
+ * Ghi file với auto-elevation trên Linux/macOS khi gặp EACCES
+ * - Linux: dùng pkexec (native password dialog)
+ * - macOS: dùng osascript (native password dialog)
+ * - Windows: throw lại lỗi (user cần Run as Admin)
+ */
+function writeFileElevated(filePath, content) {
+    try {
+        fs.writeFileSync(filePath, content, 'utf8');
+    } catch (err) {
+        if (err.code !== 'EACCES' && err.code !== 'EPERM') throw err;
+
+        const tmpPath = path.join(os.tmpdir(), 'ag-auto-' + Date.now() + '.tmp');
+        fs.writeFileSync(tmpPath, content, 'utf8');
+
+        try {
+            if (process.platform === 'linux') {
+                // pkexec shows native Linux password dialog
+                execSync(`pkexec bash -c "cp '${tmpPath}' '${filePath}' && chmod 644 '${filePath}'"`, { timeout: 30000 });
+                console.log('[AG Auto] ✅ Elevated write (pkexec) →', path.basename(filePath));
+            } else if (process.platform === 'darwin') {
+                // macOS: osascript shows native password dialog
+                const cmd = `cp '${tmpPath}' '${filePath}' && chmod 644 '${filePath}'`;
+                execSync(`osascript -e 'do shell script "${cmd}" with administrator privileges'`, { timeout: 30000 });
+                console.log('[AG Auto] ✅ Elevated write (osascript) →', path.basename(filePath));
+            } else {
+                // Windows: throw original error
+                throw err;
+            }
+        } catch (elevErr) {
+            try { fs.unlinkSync(tmpPath); } catch (_) { }
+            if (elevErr === err) throw err;
+            console.error('[AG Auto] Elevation failed:', elevErr.message);
+            throw new Error(`Permission denied. Trên Linux, hãy thử: sudo chmod -R a+w "${path.dirname(filePath)}"`);
+        }
+
+        try { fs.unlinkSync(tmpPath); } catch (_) { }
+    }
+}
 
 /**
  * Tìm file workbench.html của VS Code
@@ -111,7 +153,7 @@ function writeConfigJson(context) {
             clickIntervalMs: config.get('clickIntervalMs', 1000)
         });
         const configPath = path.join(wbDir, 'ag-auto-config.json');
-        fs.writeFileSync(configPath, configData, 'utf8');
+        writeFileElevated(configPath, configData);
         console.log('[AG Auto] Config JSON updated:', configData);
     } catch (e) {
         console.error('[AG Auto] Error writing config JSON:', e.message);
@@ -185,7 +227,7 @@ function installScript(context) {
             const jsInjection = `\n${JS_TAG_START}\n;(function(){try{${scriptContent}}catch(e){console.error('[AG Auto] Lỗi:',e);}})();\n${JS_TAG_END}`;
             jsContent += jsInjection;
 
-            fs.writeFileSync(jsPath, jsContent, 'utf8');
+            writeFileElevated(jsPath, jsContent);
             console.log('[AG Auto] ✅ Inject vào', path.basename(jsPath), '(bypass CSP)!');
         }
     } catch (err) {
@@ -205,11 +247,11 @@ function installScript(context) {
 
         // Fallback: thêm ag-auto-script.js cho các bản cũ
         const destPath = path.join(wbDir, 'ag-auto-script.js');
-        fs.writeFileSync(destPath, scriptContent, 'utf8');
+        writeFileElevated(destPath, scriptContent);
         const injection = `\n${TAG_START}\n<script src="ag-auto-script.js?v=${ts}"></script>\n${TAG_END}`;
         html = html.replace('</html>', injection + '\n</html>');
 
-        fs.writeFileSync(wbPath, html, 'utf8');
+        writeFileElevated(wbPath, html);
         console.log('[AG Auto] ✅ Inject + cache bust vào workbench.html!');
     } catch (err) {
         console.error('[AG Auto] Lỗi inject vào HTML:', err.message);
@@ -234,7 +276,7 @@ function uninstallScript() {
         let html = fs.readFileSync(wbPath, 'utf8');
         const htmlRegex = new RegExp(`${escapeRegex(TAG_START)}[\\s\\S]*?${escapeRegex(TAG_END)}`, 'g');
         html = html.replace(htmlRegex, '');
-        fs.writeFileSync(wbPath, html, 'utf8');
+        writeFileElevated(wbPath, html);
 
         // Xoá file script
         const scriptPath = path.join(wbDir, 'ag-auto-script.js');
@@ -248,7 +290,7 @@ function uninstallScript() {
                 let js = fs.readFileSync(p, 'utf8');
                 const jsRegex = new RegExp(`${escapeRegex(JS_TAG_START)}[\\s\\S]*?${escapeRegex(JS_TAG_END)}`, 'g');
                 js = js.replace(jsRegex, '');
-                fs.writeFileSync(p, js, 'utf8');
+                writeFileElevated(p, js);
             }
         }
 
@@ -893,6 +935,11 @@ function startCommandsLoop() {
 
     _autoAcceptInterval = setInterval(() => {
         if (!_autoAcceptEnabled) return;
+
+        // ONLY run Accept commands if user has an "Accept" pattern enabled
+        const wantsAccept = _httpClickPatterns.some(p => p.toLowerCase().includes('accept'));
+        if (!wantsAccept) return;
+
         Promise.allSettled(
             ACCEPT_COMMANDS.map(cmd => vscode.commands.executeCommand(cmd))
         ).catch(() => { });
@@ -905,9 +952,9 @@ function startCommandsLoop() {
 // EXTENSION ACTIVATION
 // =============================================================
 function activate(context) {
-    console.log('[AG Auto] Extension đang khởi động (v4.22.0)...');
+    console.log('[AG Auto] Extension đang khởi động (v5.1.0)...');
 
-    const INJECT_KEY = 'ag-auto-injected-v4.22';
+    const INJECT_KEY = 'ag-auto-injected-v5.1';
     const alreadyInjected = context.globalState.get(INJECT_KEY, false);
 
     if (!alreadyInjected) {
