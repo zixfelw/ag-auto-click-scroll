@@ -433,6 +433,7 @@ function getSettingsHtml(cfg) {
             inputPlaceholder: "Nhập text nút mới...",
             btnAdd: "+ Thêm",
             btnSave: "💾 Lưu & Áp Dụng",
+            zoomTitle: "Thu phóng",
             langTitle: "Ngôn ngữ / Language",
             clickOff: "Click để Tắt",
             clickOn: "Click để Bật",
@@ -453,6 +454,7 @@ function getSettingsHtml(cfg) {
             inputPlaceholder: "Enter new button text...",
             btnAdd: "+ Add",
             btnSave: "💾 Save & Apply",
+            zoomTitle: "Zoom",
             langTitle: "Ngôn ngữ / Language",
             clickOff: "Click to Disable",
             clickOn: "Click to Enable",
@@ -473,6 +475,7 @@ function getSettingsHtml(cfg) {
             inputPlaceholder: "输入新按钮文本...",
             btnAdd: "+ 添加",
             btnSave: "💾 保存并应用",
+            zoomTitle: "缩放",
             langTitle: "Ngôn ngữ / Language",
             clickOff: "点击禁用",
             clickOn: "点击启用",
@@ -497,6 +500,11 @@ function getSettingsHtml(cfg) {
         padding: 24px;
         line-height: 1.6;
     }
+    .zoom-bar { display:flex; align-items:center; justify-content:center; gap:10px; margin-bottom:20px; }
+    .zoom-bar span { font-size:0.85em; color:#9098b0; }
+    .zoom-bar button { width:32px; height:32px; border-radius:8px; border:1px solid #45475a; background:#313244; color:#e8ecf4; font-size:1.1em; cursor:pointer; transition:all 0.2s; }
+    .zoom-bar button:hover { background:#45475a; border-color:#89b4fa; }
+    .zoom-level { font-size:0.88em; color:#89b4fa; font-weight:600; min-width:44px; text-align:center; }
     h1 {
         font-size: 1.6em;
         background: linear-gradient(135deg, #89b4fa, #a6e3a1);
@@ -659,6 +667,14 @@ function getSettingsHtml(cfg) {
     <h1>⚡ AG Auto Click & Scroll</h1>
     <p class="subtitle">${strings.title}</p>
 
+    <div class="zoom-bar">
+        <span>${strings.zoomTitle}</span>
+        <button onclick="zoomOut()">−</button>
+        <span class="zoom-level" id="zoomDisplay">100%</span>
+        <button onclick="zoomIn()">+</button>
+        <button onclick="zoomReset()" style="font-size:0.75em;width:auto;padding:0 10px;">Reset</button>
+    </div>
+
     <!-- Enable/Disable & Lang -->
     <div class="card">
         <div class="card-title">🔌 ${strings.status}</div>
@@ -815,6 +831,19 @@ function getSettingsHtml(cfg) {
         const newLang = document.getElementById('selLang').value;
         vscode.postMessage({ command: 'changeLang', lang: newLang });
     }
+
+    // Zoom
+    var _zoomLevel = 100;
+    try { var saved = localStorage.getItem('ag-zoom'); if(saved) _zoomLevel = parseInt(saved); } catch(e){}
+    function applyZoom() {
+        document.body.style.zoom = (_zoomLevel/100);
+        document.getElementById('zoomDisplay').textContent = _zoomLevel + '%';
+        try { localStorage.setItem('ag-zoom', _zoomLevel); } catch(e){}
+    }
+    function zoomIn() { if(_zoomLevel<150) { _zoomLevel+=10; applyZoom(); } }
+    function zoomOut() { if(_zoomLevel>50) { _zoomLevel-=10; applyZoom(); } }
+    function zoomReset() { _zoomLevel=100; applyZoom(); }
+    if(_zoomLevel!==100) applyZoom();
 </script>
 </body>
 </html>`;
@@ -952,9 +981,9 @@ function startCommandsLoop() {
 // EXTENSION ACTIVATION
 // =============================================================
 function activate(context) {
-    console.log('[AG Auto] Extension đang khởi động (v5.1.0)...');
+    console.log('[AG Auto] Extension đang khởi động (v5.2.0)...');
 
-    const INJECT_KEY = 'ag-auto-injected-v5.1';
+    const INJECT_KEY = 'ag-auto-injected-v5.2';
     const alreadyInjected = context.globalState.get(INJECT_KEY, false);
 
     if (!alreadyInjected) {
