@@ -981,9 +981,9 @@ function startCommandsLoop() {
 // EXTENSION ACTIVATION
 // =============================================================
 function activate(context) {
-    console.log('[AG Auto] Extension đang khởi động (v5.4.0)...');
+    console.log('[AG Auto] Extension đang khởi động (v5.4.1)...');
 
-    const INJECT_KEY = 'ag-auto-injected-v5.4';
+    const INJECT_KEY = 'ag-auto-injected-v5.4.1';
     const alreadyInjected = context.globalState.get(INJECT_KEY, false);
 
     if (!alreadyInjected) {
