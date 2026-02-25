@@ -165,6 +165,7 @@
     window.addEventListener('scroll', window._agScrollListener, true);
 
     // --- 3. AUTO SCROLL ---
+    var _atBottom = new WeakSet(); // track elements already at bottom
     var autoScroll = setInterval(function () {
         if (!window._agAutoEnabled) return;
         if (!window._agScrollEnabled) return;
@@ -177,16 +178,25 @@
             var hasScrollbar = el.scrollHeight > el.clientHeight &&
                 (style.overflowY === 'auto' || style.overflowY === 'scroll');
             if (!hasScrollbar) return false;
+            // Skip code editor and text areas
             if (el.closest('.monaco-editor') || el.closest('.part.editor')) return false;
             if (el.tagName === 'TEXTAREA') return false;
+            // ONLY scroll inside the Antigravity chat panel — skip history, sidebar, everything else
+            if (!el.closest('.antigravity-agent-side-panel')) return false;
             return true;
         });
 
         if (scrollables.length > 0) {
             isAutoScrolling = true;
             scrollables.forEach(function (el) {
-                if (el.scrollHeight - el.scrollTop - el.clientHeight > 5) {
+                var gap = el.scrollHeight - el.scrollTop - el.clientHeight;
+                if (gap > 5) {
+                    // Not at bottom yet — scroll down and clear "at bottom" flag
+                    _atBottom.delete(el);
                     el.scrollTop = el.scrollHeight;
+                } else {
+                    // Already at bottom — mark it, do nothing (prevents jitter)
+                    _atBottom.add(el);
                 }
             });
             setTimeout(function () { isAutoScrolling = false; }, 50);

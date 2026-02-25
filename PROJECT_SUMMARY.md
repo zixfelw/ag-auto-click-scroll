@@ -1,7 +1,7 @@
 # AG Auto Click & Scroll — Project Summary (Chi tiết)
 
 > Tài liệu tóm tắt toàn bộ dự án. Đọc file này đầu tiên khi bắt đầu chat mới.
-> Cập nhật: 2026-02-24 | Version: **v5.1.0** | Publisher: **zixfel**
+> Cập nhật: 2026-02-25 | Version: **v5.4.0** | Publisher: **zixfel**
 
 ---
 
