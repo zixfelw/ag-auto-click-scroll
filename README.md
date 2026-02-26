@@ -1,15 +1,8 @@
-## ⚠️ Vừa update Antigravity? Đọc đây!
+## ✅ Antigravity vừa update? Không cần lo!
 
-> Khi Antigravity cập nhật phiên bản mới (ví dụ lên **1.19.4**), các file hệ thống bị ghi đè → extension **tạm mất hiệu lực**. **Đây không phải lỗi** — chỉ cần inject lại script là xong.
+> Từ **v5.5.0**, extension tự động phát hiện khi Antigravity cập nhật phiên bản mới và **tự inject lại script** mà không cần bất kỳ thao tác thủ công nào. Chỉ cần cài extension một lần — mọi thứ tự động từ A đến Z! 🚀
 
-**Cách khắc phục (mất 30 giây):**
-
-1. **Gỡ extension cũ**: Vào Extensions → tìm `zixfel` → nhấn **Uninstall**
-2. **Cài lại bản mới nhất**: `Ctrl+Shift+P` → `Extensions: Install from VSIX...` → chọn file `.vsix`
-3. **Inject script**: `Ctrl+Shift+P` → tìm **`AG Auto: Enable (Inject Script)`** → nhấn Enter
-4. **Khởi động lại**: Tắt hoàn toàn Antigravity → Mở lại → **Xong!** ✅
-
-> 💡 Sau khi inject lại, extension sẽ hoạt động bình thường. Bạn chỉ cần làm bước này **mỗi khi Antigravity update phiên bản mới**.
+> 💡 Nếu bạn đang dùng phiên bản cũ (< v5.5), hãy gỡ extension cũ → cài lại bản mới nhất từ file `.vsix` → Restart Antigravity.
 
 ---
 
@@ -109,7 +102,10 @@ Mặc định **OFF**: `Accept all` (bật thủ công khi cần)
 
 ## 🔄 Changelog
 
-### v5.4.0 (Latest) 🎉
+### v5.5.0 (Latest) 🎉
+- 🔄 **Auto-fix sau update** — Tự phát hiện khi Antigravity update và tự inject lại script, không cần thao tác thủ công
+
+### v5.4.0
 - 📜 **Smart Auto Scroll** — Không cuộn nhầm lịch sử chat (sidebar/history), chỉ cuộn trong khung chat chính
 - 🛑 **Jitter-free Scrolling** — Dừng cuộn ngay khi đã chạm đáy, loại bỏ hiện tượng giật màn hình
 
