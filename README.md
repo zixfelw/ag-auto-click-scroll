@@ -13,7 +13,7 @@ Thiết kế thông minh — chỉ click **nút approval** (có nút Reject bên
 
 **Cách khắc phục (mất 30 giây):**
 
-1. **Gỡ extension cũ**: Vào Extensions → tìm `AG Auto Click & Scroll` → nhấn **Uninstall**
+1. **Gỡ extension cũ**: Vào Extensions → tìm `zixfel` → nhấn **Uninstall**
 2. **Cài lại bản mới nhất**: `Ctrl+Shift+P` → `Extensions: Install from VSIX...` → chọn file `.vsix`
 3. **Inject script**: `Ctrl+Shift+P` → tìm **`AG Auto: Enable (Inject Script)`** → nhấn Enter
 4. **Khởi động lại**: Tắt hoàn toàn Antigravity → Mở lại → **Xong!** ✅
