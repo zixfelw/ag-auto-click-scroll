@@ -1,9 +1,24 @@
-# 🚀 AG Auto Click & Scroll v5.1
+# 🚀 AG Auto Click & Scroll v5.4
 
 **Extension tự động nhấn nút Run, Allow, Accept all và cuộn khung chat Antigravity.**  
 Thiết kế thông minh — chỉ click **nút approval** (có nút Reject bên cạnh), không click nhầm UI khác.
 
 > 🖥 **Hỗ trợ Windows & Linux** — tự động xử lý quyền ghi file trên mọi hệ điều hành.
+
+---
+
+## ⚠️ Vừa update Antigravity? Đọc đây!
+
+> Khi Antigravity cập nhật phiên bản mới (ví dụ lên **1.19.4**), các file hệ thống bị ghi đè → extension **tạm mất hiệu lực**. **Đây không phải lỗi** — chỉ cần inject lại script là xong.
+
+**Cách khắc phục (mất 30 giây):**
+
+1. **Gỡ extension cũ**: Vào Extensions → tìm `AG Auto Click & Scroll` → nhấn **Uninstall**
+2. **Cài lại bản mới nhất**: `Ctrl+Shift+P` → `Extensions: Install from VSIX...` → chọn file `.vsix`
+3. **Inject script**: `Ctrl+Shift+P` → tìm **`AG Auto: Enable (Inject Script)`** → nhấn Enter
+4. **Khởi động lại**: Tắt hoàn toàn Antigravity → Mở lại → **Xong!** ✅
+
+> 💡 Sau khi inject lại, extension sẽ hoạt động bình thường. Bạn chỉ cần làm bước này **mỗi khi Antigravity update phiên bản mới**.
 
 ---
 
@@ -23,7 +38,7 @@ Thiết kế thông minh — chỉ click **nút approval** (có nút Reject bên
 
 ---
 
-## 🆕 Có gì mới trong v5.1
+## 🆕 Có gì mới trong v5.4
 
 ### 🐧 Hỗ trợ Linux & macOS
 - Tự động xử lý quyền file khi inject vào thư mục hệ thống
@@ -94,7 +109,11 @@ Mặc định **OFF**: `Accept all` (bật thủ công khi cần)
 
 ## 🔄 Changelog
 
-### v5.1.0 (Latest) 🎉
+### v5.4.0 (Latest) 🎉
+- 📜 **Smart Auto Scroll** — Không cuộn nhầm lịch sử chat (sidebar/history), chỉ cuộn trong khung chat chính
+- 🛑 **Jitter-free Scrolling** — Dừng cuộn ngay khi đã chạm đáy, loại bỏ hiện tượng giật màn hình
+
+### v5.1.0
 - 🐧 **Linux/macOS support** — auto-elevation, không cần `sudo` thủ công
 - 🚫 **Diff Protection** — không click Accept Changes/Accept All trong diff editor
 - 🧠 **Smart Commands Loop** — commands loop ngầm tôn trọng pattern settings
