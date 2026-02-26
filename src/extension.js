@@ -978,22 +978,40 @@ function startCommandsLoop() {
 }
 
 // =============================================================
+// CHECK IF SCRIPT IS ACTUALLY INJECTED
+// =============================================================
+/**
+ * Check if the inject markers actually exist in workbench.html
+ * Returns false if Antigravity updated and overwrote the files
+ */
+function isScriptInjected() {
+    try {
+        const wbPath = getWorkbenchPath();
+        if (!wbPath) return false;
+        const html = fs.readFileSync(wbPath, 'utf8');
+        return html.includes(TAG_START);
+    } catch (e) {
+        console.log('[AG Auto] Cannot check inject status:', e.message);
+        return false;
+    }
+}
+
+// =============================================================
 // EXTENSION ACTIVATION
 // =============================================================
 function activate(context) {
-    console.log('[AG Auto] Extension đang khởi động (v5.4.2)...');
+    console.log('[AG Auto] Extension đang khởi động (v5.5.0)...');
 
-    const INJECT_KEY = 'ag-auto-injected-v5.4.2';
-    const alreadyInjected = context.globalState.get(INJECT_KEY, false);
+    // Check if script is ACTUALLY present in workbench files (not just a stored key)
+    // This handles Antigravity updates that overwrite workbench files
+    const needsInject = !isScriptInjected();
 
-    if (!alreadyInjected) {
-        // FIRST RUN: inject into workbench files + auto-reload
-        console.log('[AG Auto] First run — injecting into workbench...');
+    if (needsInject) {
+        console.log('[AG Auto] Script not found in workbench — injecting...');
         try {
             installScript(context);
-            context.globalState.update(INJECT_KEY, true);
             console.log('[AG Auto] ✅ Injected! Auto-reload in 1s...');
-            vscode.window.showInformationMessage('[AG Auto] ✅ Installed! Reloading...');
+            vscode.window.showInformationMessage('[AG Auto] ✅ Script injected! Reloading...');
             setTimeout(() => {
                 vscode.commands.executeCommand('workbench.action.reloadWindow');
             }, 1000);
