@@ -1,12 +1,3 @@
-# 🚀 AG Auto Click & Scroll v5.4
-
-**Extension tự động nhấn nút Run, Allow, Accept all và cuộn khung chat Antigravity.**  
-Thiết kế thông minh — chỉ click **nút approval** (có nút Reject bên cạnh), không click nhầm UI khác.
-
-> 🖥 **Hỗ trợ Windows & Linux** — tự động xử lý quyền ghi file trên mọi hệ điều hành.
-
----
-
 ## ⚠️ Vừa update Antigravity? Đọc đây!
 
 > Khi Antigravity cập nhật phiên bản mới (ví dụ lên **1.19.4**), các file hệ thống bị ghi đè → extension **tạm mất hiệu lực**. **Đây không phải lỗi** — chỉ cần inject lại script là xong.
@@ -19,6 +10,15 @@ Thiết kế thông minh — chỉ click **nút approval** (có nút Reject bên
 4. **Khởi động lại**: Tắt hoàn toàn Antigravity → Mở lại → **Xong!** ✅
 
 > 💡 Sau khi inject lại, extension sẽ hoạt động bình thường. Bạn chỉ cần làm bước này **mỗi khi Antigravity update phiên bản mới**.
+
+---
+
+# 🚀 AG Auto Click & Scroll v5.4
+
+**Extension tự động nhấn nút Run, Allow, Accept all và cuộn khung chat Antigravity.**  
+Thiết kế thông minh — chỉ click **nút approval** (có nút Reject bên cạnh), không click nhầm UI khác.
+
+> 🖥 **Hỗ trợ Windows & Linux** — tự động xử lý quyền ghi file trên mọi hệ điều hành.
 
 ---
 
