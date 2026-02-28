@@ -3,6 +3,18 @@
     if (window._agAutoLoaded) return;
     window._agAutoLoaded = true;
 
+    // --- Guard: skip entirely in Remote SSH / remote context ---
+    // Remote windows don't have the local HTTP server → sync XHR blocks UI → crash
+    if (document.body && (
+        document.body.classList.contains('web') ||
+        document.querySelector('[id*="remote-indicator"]') ||
+        window.location.search.includes('tkn=') ||
+        window.location.href.includes('vscode-remote')
+    )) {
+        console.log('[AG Auto] 🚫 Remote context detected — skipping auto script');
+        return;
+    }
+
     // --- Dọn dẹp bản cũ ---
     if (window._agToolIntervals) {
         window._agToolIntervals.forEach(clearInterval);
@@ -22,44 +34,38 @@
     // --- ON/OFF polling via HTTP server (Extension Host runs on port 48787) ---
     var AG_HTTP_PORT = 48787;
     var _agPollCount = 0;
+    var _agPollErrors = 0;
     var _agConfigReload = setInterval(function () {
         _agPollCount++;
+        // Stop polling after too many consecutive errors (e.g. remote/SSH context)
+        if (_agPollErrors > 5) return;
         try {
             var xhr = new XMLHttpRequest();
-            xhr.open('GET', 'http://127.0.0.1:' + AG_HTTP_PORT + '/ag-status', false); // sync
-            xhr.send();
-            if (xhr.status === 200) {
-                var cfg = JSON.parse(xhr.responseText);
-                if (typeof cfg.enabled === 'boolean') {
-                    if (window._agAutoEnabled !== cfg.enabled) {
-                        console.log('[AG Auto] ' + (cfg.enabled ? '✅ BẬT' : '❌ TẮT') + ' (live toggle via HTTP)');
+            xhr.open('GET', 'http://127.0.0.1:' + AG_HTTP_PORT + '/ag-status', true); // ASYNC — won't block UI
+            xhr.timeout = 1500; // 1.5s timeout to prevent hanging
+            xhr.onload = function () {
+                if (xhr.status === 200) {
+                    _agPollErrors = 0; // reset error counter on success
+                    var cfg = JSON.parse(xhr.responseText);
+                    if (typeof cfg.enabled === 'boolean') {
+                        if (window._agAutoEnabled !== cfg.enabled) {
+                            console.log('[AG Auto] ' + (cfg.enabled ? '✅ BẬT' : '❌ TẮT') + ' (live toggle via HTTP)');
+                        }
+                        window._agAutoEnabled = cfg.enabled;
                     }
-                    window._agAutoEnabled = cfg.enabled;
+                    if (typeof cfg.scrollEnabled === 'boolean') window._agScrollEnabled = cfg.scrollEnabled;
+                    if (cfg.clickPatterns && Array.isArray(cfg.clickPatterns)) CLICK_PATTERNS = cfg.clickPatterns;
+                    if (cfg.pauseScrollMs) PAUSE_SCROLL_MS = cfg.pauseScrollMs;
+                    if (cfg.scrollIntervalMs) SCROLL_INTERVAL_MS = cfg.scrollIntervalMs;
+                    if (cfg.clickIntervalMs) CLICK_INTERVAL_MS = cfg.clickIntervalMs;
+                    if (_agPollCount <= 2) console.log('[AG Auto] HTTP Poll #' + _agPollCount + ' OK, enabled=' + window._agAutoEnabled + ', patterns=' + CLICK_PATTERNS.length);
                 }
-                // Live-update scroll toggle
-                if (typeof cfg.scrollEnabled === 'boolean') {
-                    window._agScrollEnabled = cfg.scrollEnabled;
-                }
-                // Live-update click patterns from HTTP
-                if (cfg.clickPatterns && Array.isArray(cfg.clickPatterns)) {
-                    CLICK_PATTERNS = cfg.clickPatterns;
-                }
-                // Live-update scroll + click timing
-                if (cfg.pauseScrollMs) PAUSE_SCROLL_MS = cfg.pauseScrollMs;
-                if (cfg.scrollIntervalMs) SCROLL_INTERVAL_MS = cfg.scrollIntervalMs;
-                if (cfg.clickIntervalMs) CLICK_INTERVAL_MS = cfg.clickIntervalMs;
-                if (_agPollCount <= 2) console.log('[AG Auto] HTTP Poll #' + _agPollCount + ' OK, enabled=' + window._agAutoEnabled + ', patterns=' + CLICK_PATTERNS.length + ', scrollMs=' + SCROLL_INTERVAL_MS);
-            } else {
-                // Try alternate port
-                var xhr2 = new XMLHttpRequest();
-                xhr2.open('GET', 'http://127.0.0.1:' + (AG_HTTP_PORT + 1) + '/ag-status', false);
-                xhr2.send();
-                if (xhr2.status === 200) {
-                    var cfg2 = JSON.parse(xhr2.responseText);
-                    if (typeof cfg2.enabled === 'boolean') window._agAutoEnabled = cfg2.enabled;
-                }
-            }
+            };
+            xhr.onerror = function () { _agPollErrors++; };
+            xhr.ontimeout = function () { _agPollErrors++; };
+            xhr.send();
         } catch (e) {
+            _agPollErrors++;
             if (_agPollCount <= 3) console.log('[AG Auto] HTTP Poll #' + _agPollCount + ' error:', e.message);
         }
     }, 2000);

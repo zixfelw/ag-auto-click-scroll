@@ -115,7 +115,12 @@ Mặc định **OFF**: `Accept all` (bật thủ công khi cần)
 
 ## 🔄 Changelog
 
-### v5.5.0 (Latest) 🎉
+### v5.7.0 (Latest) 🎉
+- 🔐 **SSH Compatible** — Không can thiệp vào SSH Remote, khắc phục lỗi văng khi dùng Remote-SSH
+- ⚡ **Async HTTP Polling** — Chuyển từ sync XHR sang async, không block UI
+- 🛡️ **Auto-stop polling** — Tự dừng poll khi phát hiện remote context
+
+### v5.5.0
 - 🔄 **Auto-fix sau update** — Tự phát hiện khi Antigravity update và tự inject lại script, không cần thao tác thủ công
 
 ### v5.4.0
