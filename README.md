@@ -1,94 +1,86 @@
-## ✅ Antigravity vừa update? Không cần lo!
+## Antigravity vừa update? Không cần lo!
 
-> Từ **v5.5.0**, extension tự động phát hiện khi Antigravity cập nhật phiên bản mới và **tự inject lại script** mà không cần bất kỳ thao tác thủ công nào. Chỉ cần cài extension một lần — mọi thứ tự động từ A đến Z! 🚀
+> Từ **v5.5.0**, extension tự động phát hiện khi Antigravity cập nhật phiên bản mới và **tự inject lại script** mà không cần bất kỳ thao tác thủ công nào. Chỉ cần cài extension một lần — mọi thứ tự động từ A đến Z!
 
-> 💡 Nếu bạn đang dùng phiên bản cũ (< v5.5), hãy gỡ extension cũ → cài lại bản mới nhất từ file `.vsix` → Restart Antigravity.
+> Nếu bạn đang dùng phiên bản cũ (< v5.5), hãy gỡ extension cũ → cài lại bản mới nhất từ file `.vsix` → Restart Antigravity.
 
 ---
 
-## ☕ Ủng hộ tác giả
+## Ủng hộ tác giả
 
-Nếu extension giúp ích cho bạn, mời tác giả một ly cà phê nhé! ☕  
+Nếu extension giúp ích cho bạn, mời tác giả một ly cà phê nhé!  
 Quét mã QR bên dưới qua **Momo, VietQR hoặc Napas 247**:
 
 <p align="center">
   <img src="media/momo-qr.png" alt="Momo QR - Ủng hộ tác giả" width="250"/>
 </p>
 
-> 🙏 Mọi sự ủng hộ đều là động lực để mình tiếp tục phát triển extension miễn phí cho cộng đồng!
+> Mọi sự ủng hộ đều là động lực để mình tiếp tục phát triển extension miễn phí cho cộng đồng!
 
 ---
 
-# 🚀 AG Auto Click & Scroll v6.2
+# AG Auto Click & Scroll v6.3
 
 **Extension tự động nhấn nút Run, Allow, Accept all và cuộn khung chat Antigravity.**  
 Thiết kế thông minh — chỉ click **nút approval** (có nút Reject bên cạnh), không click nhầm UI khác.
 
-> 🖥 **Hỗ trợ Windows & Linux** — tự động xử lý quyền ghi file trên mọi hệ điều hành.
+> Hỗ trợ **Windows & Linux** — tự động xử lý quyền ghi file trên mọi hệ điều hành.
 
 ---
 
-## ✨ Tính năng chính
+## Có gì mới trong v6.3
 
-- **Auto Click** — Tự động nhấn Run, Allow, Always Allow, Keep Waiting, Retry, Continue...
-- **Auto Scroll** — Cuộn khung chat tự động, dừng khi user cuộn tay
-- **Click Stats** — Bảng thống kê click realtime với progress bar so sánh
-- **Persistent Stats** — Lưu thống kê qua restart, chỉ mất khi ấn Reset
-- **Toggle Panel** — Click status bar lần 1 mở Settings, lần 2 đóng
-- **SSH Remote** — Hoạt động bình thường trên Remote-SSH
-- **Đa ngôn ngữ** — Hỗ trợ Tiếng Việt, English, 中文
+### Click Stats Dashboard
+- Bảng thống kê click realtime ngay trong Settings với progress bar so sánh
+- Nút click nhiều nhất tự động nhận vương miện
+- Badge tổng số click ngay cạnh tiêu đề
+- Nút Reset xóa toàn bộ thống kê, đồng bộ cả autoScript và extension host
+- Stats tự cập nhật mỗi 2 giây, bar có animation mượt
+- Lưu thống kê qua restart, chỉ mất khi ấn Reset
 
+### Native Dialog Auto-Click (Win32)
+- Tự động nhấn **Keep Waiting** trong dialog "window not responding" bằng Win32 API
+- Quét mọi cửa sổ Windows để tìm nút Keep Waiting, không phụ thuộc title dialog
+- Đếm số lần click vào stats, merge với stats từ autoScript
+
+### Toggle Settings Panel
+- Click status bar lần 1 → mở Settings, lần 2 → đóng Settings
+- Cả 2 nút "Accept ON" và "Scroll ON" đều hỗ trợ toggle
+
+### Display Name Mapping
+- Hiển thị tên đầy đủ (VD: "Allow This Conversion") mà không ảnh hưởng logic click
+- Tên nội bộ giữ nguyên để đảm bảo pattern matching chính xác
+
+---
+
+## Tính năng chính
 
 | Tính năng | Mô tả |
 |-----------|-------|
-| 🎯 **Auto Click** | Tự động nhấn Run, Allow, Always Allow, Accept all, Keep Waiting... |
-| 📜 **Auto Scroll** | Cuộn khung chat xuống cuối để không bỏ lỡ nội dung mới |
-| ⚡ **Instant Toggle** | Gạt switch ON/OFF → áp dụng **tức thì**, không cần Save hay Reload |
-| 🔀 **Tắt/Bật riêng** | Accept và Scroll có toggle riêng, hoạt động độc lập |
-| 📡 **HTTP Live Sync** | Settings cập nhật realtime qua HTTP server nội bộ |
-| 🛡 **Safe Click** | Chỉ click nút approval (có Reject bên cạnh), không phá UI |
-| 🚫 **Diff Protection** | KHÔNG click Accept Changes/Accept All trong diff/merge editor |
-| ⚙️ **Settings UI** | Giao diện đẹp — bật/tắt từng nút, chỉnh tốc độ, đa ngôn ngữ |
-| 📊 **Dual Status Bar** | Hiện Accept ON/OFF và Scroll ON/OFF riêng biệt, màu xanh/đỏ |
+| **Auto Click** | Tự động nhấn Run, Allow, Always Allow, Accept all, Keep Waiting... |
+| **Auto Scroll** | Cuộn khung chat xuống cuối để không bỏ lỡ nội dung mới |
+| **Click Stats** | Bảng thống kê click realtime với progress bar và badge |
+| **Instant Toggle** | Gạt switch ON/OFF → áp dụng tức thì, không cần Save hay Reload |
+| **Tắt/Bật riêng** | Accept và Scroll có toggle riêng, hoạt động độc lập |
+| **HTTP Live Sync** | Settings cập nhật realtime qua HTTP server nội bộ |
+| **Safe Click** | Chỉ click nút approval (có Reject bên cạnh), không phá UI |
+| **Diff Protection** | KHÔNG click Accept Changes/Accept All trong diff/merge editor |
+| **Settings UI** | Giao diện đẹp — bật/tắt từng nút, chỉnh tốc độ, đa ngôn ngữ |
+| **Dual Status Bar** | Hiện Accept ON/OFF và Scroll ON/OFF riêng biệt, màu xanh/đỏ |
 
 ---
 
-## 🆕 Có gì mới trong v5.4
-
-### 🐧 Hỗ trợ Linux & macOS
-- Tự động xử lý quyền file khi inject vào thư mục hệ thống
-- **Linux**: hiện hộp thoại nhập mật khẩu native (pkexec)
-- **macOS**: hiện hộp thoại nhập mật khẩu native (osascript)
-- **Windows**: hoạt động như trước, không ảnh hưởng gì
-
-### 🚫 Diff/Merge Editor Protection
-- KHÔNG click nút **Accept Changes**, **Accept All**, **Accept Incoming** trong diff editor
-- Cho phép xem code diff bình thường mà không bị auto-accept
-- Tắt pattern "Accept all" → commands loop ngầm cũng **dừng hoàn toàn**
-
-### ⚡ Instant Toggle & Live Sync
-- **Enable Auto Click & Scroll** — gạt switch → tức thì ON/OFF
-- **Enable Auto Scroll** — toggle riêng cho scroll, instant
-- Tắt/bật từng pattern → **Save & Apply** → cập nhật trong 2 giây
-
-### 📊 Dual Status Bar
-- Hai items liền kề trên status bar: `✓ Accept ON` `✓ Scroll ON`
-- Mỗi cái có **màu riêng**: 🟢 xanh khi ON, 🔴 đỏ khi OFF
-- Click vào bất kỳ item nào đều mở Settings
-
----
-
-## 📋 Danh sách nút hỗ trợ
+## Danh sách nút hỗ trợ
 
 Mặc định **ON**: `Run` · `Allow` · `Always Allow` · `Keep Waiting` · `Retry` · `Continue` · `Allow Once` · `Allow This Con`
 
 Mặc định **OFF**: `Accept all` (bật thủ công khi cần)
 
-> 💡 Bạn có thể thêm nút tùy chỉnh hoặc bật/tắt từng nút trong Settings.
+> Bạn có thể thêm nút tùy chỉnh hoặc bật/tắt từng nút trong Settings.
 
 ---
 
-## 🔧 Cách sử dụng
+## Cách sử dụng
 
 ### Cài đặt
 1. Mở Antigravity / VS Code
@@ -96,7 +88,7 @@ Mặc định **OFF**: `Accept all` (bật thủ công khi cần)
 3. Chọn file `.vsix` → Cài đặt → **Reload Window**
 4. Extension tự inject script + **auto-reload** lần đầu
 
-> 🐧 **Linux**: lần đầu inject sẽ hiện hộp thoại nhập mật khẩu — chỉ cần nhập 1 lần.
+> **Linux**: lần đầu inject sẽ hiện hộp thoại nhập mật khẩu — chỉ cần nhập 1 lần.
 
 ### Mở Settings
 - Click **"Accept ON"** hoặc **"Scroll ON"** trên Status Bar (góc dưới phải)
@@ -105,73 +97,59 @@ Mặc định **OFF**: `Accept all` (bật thủ công khi cần)
 ### Sử dụng
 - **Toggle ON/OFF**: Gạt switch → tức thì, không cần Save
 - **Đổi patterns/settings**: Chỉnh thông số → nhấn **Save & Apply**
-- **Reload thủ công**: Nhấn nút **🔄 Reload** khi cần
+- **Reload thủ công**: Nhấn nút **Reload** khi cần
 
 ### Gỡ bỏ
 `Ctrl+Shift+P` → `AG Auto: Disable` → **Reload Window**
 
 ---
 
-> 🛡 **Safe Click**: Script chỉ click nút nằm trong approval dialog (có nút Reject/Deny/Cancel bên cạnh). Không click nhầm diff editor, navigation, sidebar, hay dialog khác.
+> **Safe Click**: Script chỉ click nút nằm trong approval dialog (có nút Reject/Deny/Cancel bên cạnh). Không click nhầm diff editor, navigation, sidebar, hay dialog khác.
 
 ---
 
-## 📸 Giao diện Settings
+## Giao diện Settings
 
 ![Settings UI](media/settings-screenshot.png)
 
 ---
 
-## 🔄 Changelog
+## Changelog
 
-### v6.2.0 (Latest)
-- **Native Dialog Auto-Click** — Tự động nhấn "Keep Waiting" trong dialog "window not responding" bằng Win32 API
-- **Persistent Click Stats** — Lưu thống kê click qua restart, chỉ mất khi ấn Reset
-- **Toggle Settings Panel** — Click status bar lần 1 mở, lần 2 đóng
-
-### v6.0.0
-- **Click Stats Dashboard** — Bảng thống kê click realtime ngay trong Settings, hiển thị số lần click từng nút với progress bar so sánh
-- **Most Clicked Badge** — Nút click nhiều nhất tự động nhận vương miện
-- **Total Clicks Counter** — Badge tổng số click ngay cạnh tiêu đề
-- **Reset Stats** — Nút reset xóa toàn bộ thống kê, đồng bộ cả autoScript và extension host
-- **Live Update** — Stats tự cập nhật mỗi 2 giây, bar có animation mượt
-- **Display Name Mapping** — Hiển thị tên đầy đủ (VD: "Allow This Conversion") mà không ảnh hưởng logic click
+### v6.3.0 (Latest)
+- **Click Stats Dashboard** — Thống kê click realtime, progress bar, vương miện, badge
+- **Native Dialog Auto-Click** — Tự nhấn "Keep Waiting" qua Win32 API
+- **Persistent Stats** — Lưu thống kê qua restart
+- **Toggle Panel** — Click status bar để mở/đóng Settings
+- **Display Name Mapping** — Hiển thị tên đầy đủ cho patterns
 
 ### v5.8.0
-- **SSH Remote Support** — Hoạt động bình thường khi dùng Remote-SSH
-- **Async HTTP Polling** — Chuyển từ sync XHR sang async, không block UI
-- **Auto-stop polling** — Tự dừng poll sau 5 lỗi liên tiếp
-- **Fix command not found** — Commands luôn được đăng ký
+- **SSH Remote Support** — Hoạt động trên Remote-SSH
+- **Async HTTP Polling** — Không block UI
+- **Auto-stop polling** — Dừng sau 5 lỗi liên tiếp
 
 ### v5.5.0
-- 🔄 **Auto-fix sau update** — Tự phát hiện khi Antigravity update và tự inject lại script, không cần thao tác thủ công
+- **Auto-fix sau update** — Tự inject lại khi Antigravity update
 
 ### v5.4.0
-- 📜 **Smart Auto Scroll** — Không cuộn nhầm lịch sử chat (sidebar/history), chỉ cuộn trong khung chat chính
-- 🛑 **Jitter-free Scrolling** — Dừng cuộn ngay khi đã chạm đáy, loại bỏ hiện tượng giật màn hình
+- **Smart Auto Scroll** — Chỉ cuộn trong khung chat chính
+- **Jitter-free Scrolling** — Dừng cuộn khi chạm đáy
 
 ### v5.1.0
-- 🐧 **Linux/macOS support** — auto-elevation, không cần `sudo` thủ công
-- 🚫 **Diff Protection** — không click Accept Changes/Accept All trong diff editor
-- 🧠 **Smart Commands Loop** — commands loop ngầm tôn trọng pattern settings
-- 📊 **Status Bar Adjacent** — 2 items nằm sát nhau, không bị chen giữa
+- **Linux/macOS support** — Auto-elevation
+- **Diff Protection** — Không click diff editor
+- **Smart Commands Loop** — Tôn trọng pattern settings
+- **Status Bar Adjacent** — 2 items liền kề
 
 ### v5.0.0
-- ⚡ Instant Toggle — ON/OFF tức thì
-- 🔀 Scroll Toggle riêng — tắt/bật độc lập
-- 📡 HTTP IPC — micro-server cho live config sync
-- 📊 Dual Status Bar — Accept/Scroll màu xanh/đỏ riêng
-- 🎨 UI nâng cấp — toggle xanh neon, text sáng, nút Reload
-- 🔄 Auto-inject + Auto-reload — cài xong tự inject, tự reload
+- Instant Toggle, Scroll Toggle, HTTP IPC, Dual Status Bar
+- UI nâng cấp, Auto-inject + Auto-reload
 
 ### v4.x
-- 🎯 Auto Click với Commands API
-- 📜 Auto Scroll với smart pause
-- ⚙️ Settings UI đa ngôn ngữ
-- 🛡 Safe Click — approval pair detection
+- Auto Click, Auto Scroll, Settings UI đa ngôn ngữ, Safe Click
 
 ---
 
-## 📄 License
+## License
 
 MIT © [Zixfel](https://github.com/zixfelw)

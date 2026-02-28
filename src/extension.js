@@ -1053,8 +1053,16 @@ function startHttpServer() {
             // Receive click stats from autoScript via query params
             if (parsed.query && parsed.query.stats) {
                 try {
-                    _clickStats = JSON.parse(decodeURIComponent(parsed.query.stats));
-                    _totalClicks = parseInt(parsed.query.total) || 0;
+                    const incoming = JSON.parse(decodeURIComponent(parsed.query.stats));
+                    const incomingTotal = parseInt(parsed.query.total) || 0;
+                    // Merge: keep server-side counts (e.g. Win32 Keep Waiting) if autoScript doesn't have them
+                    for (const key in incoming) {
+                        _clickStats[key] = incoming[key];
+                    }
+                    // Recalculate total from all stats
+                    let total = 0;
+                    for (const key in _clickStats) { total += _clickStats[key]; }
+                    _totalClicks = total;
                     // Persist to globalState
                     if (_extensionContext) {
                         _extensionContext.globalState.update('clickStats', _clickStats);
@@ -1161,7 +1169,7 @@ function isScriptInjected() {
 // EXTENSION ACTIVATION
 // =============================================================
 function activate(context) {
-    console.log('[AG Auto] Extension đang khởi động (v6.2.0)...');
+    console.log('[AG Auto] Extension đang khởi động (v6.3.0)...');
     _extensionContext = context;
 
     // Restore persisted click stats
@@ -1186,10 +1194,11 @@ public class AgWin32 {
     [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr hWnd, uint Msg, IntPtr w, IntPtr l);
 }
 "@
-$found = $false
+$global:clicked = $false
 [AgWin32]::EnumWindows({
     param($hWnd, $lp)
     if (-not [AgWin32]::IsWindowVisible($hWnd)) { return $true }
+    if ($global:clicked) { return $false }
     [AgWin32]::EnumChildWindows($hWnd, {
         param($ch, $lp2)
         $cls = New-Object System.Text.StringBuilder 64
@@ -1200,15 +1209,15 @@ $found = $false
             $t = $txt.ToString()
             if ($t -match 'Keep Waiting') {
                 [AgWin32]::PostMessage($ch, 0x00F5, [IntPtr]::Zero, [IntPtr]::Zero)
-                Write-Output 'CLICKED'
-                $script:found = $true
+                $global:clicked = $true
             }
         }
         return $true
     }, [IntPtr]::Zero) | Out-Null
-    if ($script:found) { return $false }
+    if ($global:clicked) { return $false }
     return $true
 }, [IntPtr]::Zero) | Out-Null
+if ($global:clicked) { Write-Output 'CLICKED' }
 `.trim();
 
         const keepWaitingInterval = setInterval(() => {
