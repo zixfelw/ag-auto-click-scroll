@@ -19,7 +19,7 @@ Quét mã QR bên dưới qua **Momo, VietQR hoặc Napas 247**:
 
 ---
 
-# 🚀 AG Auto Click & Scroll v5.8
+# 🚀 AG Auto Click & Scroll v6.0
 
 **Extension tự động nhấn nút Run, Allow, Accept all và cuộn khung chat Antigravity.**  
 Thiết kế thông minh — chỉ click **nút approval** (có nút Reject bên cạnh), không click nhầm UI khác.
@@ -115,7 +115,15 @@ Mặc định **OFF**: `Accept all` (bật thủ công khi cần)
 
 ## 🔄 Changelog
 
-### v5.8.0 (Latest) 🎉
+### v6.0.0 (Latest) 🎉
+- 📊 **Click Stats Dashboard** — Bảng thống kê click realtime ngay trong Settings, hiển thị số lần click từng nút với progress bar so sánh
+- 👑 **Most Clicked Badge** — Nút click nhiều nhất tự động nhận vương miện 👑
+- 🎯 **Total Clicks Counter** — Badge tổng số click ngay cạnh tiêu đề
+- 🔄 **Reset Stats** — Nút reset xóa toàn bộ thống kê, đồng bộ cả autoScript và extension host
+- ⚡ **Live Update** — Stats tự cập nhật mỗi 2 giây, bar có animation mượt
+- 🏷️ **Display Name Mapping** — Hiển thị tên đầy đủ (VD: "Allow This Conversion") mà không ảnh hưởng logic click
+
+### v5.8.0
 - 🔐 **SSH Remote Support** — Hoạt động bình thường khi dùng Remote-SSH, không bị văng hay lỗi nữa
 - ⚡ **Async HTTP Polling** — Chuyển từ sync XHR sang async với timeout, không block UI
 - 🛡️ **Auto-stop polling** — Tự dừng poll sau 5 lỗi liên tiếp, tiết kiệm tài nguyên

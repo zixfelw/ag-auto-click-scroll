@@ -326,7 +326,9 @@ function openSettingsPanel(context) {
         clickIntervalMs: config.get('clickIntervalMs', 1000),
         clickPatterns: config.get('clickPatterns', ['Allow', 'Always Allow', 'Run', 'Keep Waiting']),
         disabledClickPatterns: context.globalState.get('disabledClickPatterns', []),
-        language: config.get('language', 'vi')
+        language: config.get('language', 'vi'),
+        clickStats: _clickStats,
+        totalClicks: _totalClicks
     });
 
     // Nhận message từ Webview
@@ -345,7 +347,9 @@ function openSettingsPanel(context) {
                 clickIntervalMs: cfg.get('clickIntervalMs', 1000),
                 clickPatterns: cfg.get('clickPatterns', ['Run', 'Allow', 'Always Allow']),
                 disabledClickPatterns: context.globalState.get('disabledClickPatterns', []),
-                language: msg.lang
+                language: msg.lang,
+                clickStats: _clickStats,
+                totalClicks: _totalClicks
             });
             return;
         }
@@ -405,7 +409,24 @@ function openSettingsPanel(context) {
         if (msg.command === 'reload') {
             vscode.commands.executeCommand('workbench.action.reloadWindow');
         }
+        if (msg.command === 'resetStats') {
+            _clickStats = {};
+            _totalClicks = 0;
+            _resetStatsRequested = true; // Tell autoScript to clear its counters on next poll
+            panel.webview.postMessage({ command: 'statsUpdated', clickStats: {}, totalClicks: 0 });
+        }
+        if (msg.command === 'getStats') {
+            panel.webview.postMessage({ command: 'statsUpdated', clickStats: _clickStats, totalClicks: _totalClicks });
+        }
     }, undefined, context.subscriptions);
+
+    // Auto-refresh stats every 2s while panel is open
+    const statsTimer = setInterval(() => {
+        try {
+            panel.webview.postMessage({ command: 'statsUpdated', clickStats: _clickStats, totalClicks: _totalClicks });
+        } catch (e) { clearInterval(statsTimer); }
+    }, 2000);
+    panel.onDidDispose(() => clearInterval(statsTimer));
 }
 
 /**
@@ -513,6 +534,29 @@ function getSettingsHtml(cfg) {
         margin-bottom: 8px;
     }
     .subtitle { color: #9098b0; margin-bottom: 24px; font-size: 0.9em; }
+    .title-row { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; flex-wrap: wrap; }
+    .click-badge { display: inline-flex; align-items: center; gap: 6px; background: linear-gradient(135deg, #45475a, #313244); border: 1px solid #585b70; border-radius: 20px; padding: 4px 12px; font-size: 0.8em; color: #a6e3a1; font-weight: 600; }
+    .click-badge .count { color: #f9e2af; font-size: 1.1em; }
+    .btn-reset-stats { background: none; border: 1px solid #585b70; border-radius: 12px; color: #f38ba8; font-size: 0.7em; padding: 2px 10px; cursor: pointer; transition: all 0.2s; }
+    .btn-reset-stats:hover { background: #f38ba8; color: #1e1e2e; }
+    .stats-card { background: #313244; border-radius: 12px; padding: 16px; margin-bottom: 16px; border: 1px solid #45475a; }
+    .stats-card-title { font-size: 0.9em; color: #89b4fa; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+    .stats-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+    .stats-label { min-width: 100px; font-size: 0.8em; color: #cdd6f4; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .stats-bar-bg { flex: 1; height: 18px; background: #1e1e2e; border-radius: 9px; overflow: hidden; position: relative; }
+    .stats-bar { height: 100%; border-radius: 9px; transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1); min-width: 0; position: relative; }
+    .stats-bar.bar-1 { background: linear-gradient(90deg, #89b4fa, #74c7ec); }
+    .stats-bar.bar-2 { background: linear-gradient(90deg, #a6e3a1, #94e2d5); }
+    .stats-bar.bar-3 { background: linear-gradient(90deg, #f9e2af, #fab387); }
+    .stats-bar.bar-4 { background: linear-gradient(90deg, #f38ba8, #eba0ac); }
+    .stats-bar.bar-5 { background: linear-gradient(90deg, #cba6f7, #b4befe); }
+    .stats-bar.bar-6 { background: linear-gradient(90deg, #94e2d5, #89dceb); }
+    .stats-bar.bar-7 { background: linear-gradient(90deg, #fab387, #f9e2af); }
+    .stats-bar.bar-8 { background: linear-gradient(90deg, #74c7ec, #89b4fa); }
+    .stats-bar.bar-9 { background: linear-gradient(90deg, #eba0ac, #cba6f7); }
+    .stats-count { min-width: 36px; font-size: 0.8em; color: #bac2de; font-weight: 600; text-align: left; }
+    .stats-crown { font-size: 0.9em; }
+    .stats-empty { color: #6c7086; font-size: 0.8em; font-style: italic; text-align: center; padding: 8px; }
     .card {
         background: #313244;
         border-radius: 12px;
@@ -664,7 +708,16 @@ function getSettingsHtml(cfg) {
 </style>
 </head>
 <body>
-    <h1>⚡ AG Auto Click & Scroll</h1>
+    <div class="title-row">
+        <h1>⚡ AG Auto Click & Scroll</h1>
+        <span class="click-badge" id="totalBadge">
+            🎯 <span class="count" id="totalCount">${cfg.totalClicks || 0}</span> clicks
+        </span>
+    </div>
+    <div class="stats-card" id="statsCard">
+        <div class="stats-card-title">📊 Click Stats <button class="btn-reset-stats" onclick="resetStats()" title="Reset counter">↺ Reset</button></div>
+        <div id="statsBars"></div>
+    </div>
     <p class="subtitle">${strings.title}</p>
 
     <div class="zoom-bar">
@@ -753,6 +806,13 @@ function getSettingsHtml(cfg) {
             else { patterns.push(p); }
         }
     });
+    // Cleanup: remove 'Allow This Conversion' (redundant with 'Allow This Con' default)
+    patterns = patterns.filter(function(p) { return p !== 'Allow This Conversion'; });
+    disabledPatterns = disabledPatterns.filter(function(p) { return p !== 'Allow This Conversion'; });
+
+    // Display name overrides (pattern → display text)
+    var DISPLAY_NAMES = { 'Allow This Con': 'Allow This Conversion' };
+    function displayName(p) { return DISPLAY_NAMES[p] || p; }
 
     function renderPatterns() {
         var list = document.getElementById('templateList');
@@ -772,7 +832,7 @@ function getSettingsHtml(cfg) {
             h += '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:' + bg + ';border:1px solid ' + brd + ';border-radius:8px;margin-bottom:6px;opacity:' + opa + '">';
             h += '<div style="display:flex;align-items:center;gap:10px">';
             h += '<input type="checkbox" ' + (isOn ? 'checked' : '') + ' onchange="togPat(&quot;' + p + '&quot;)" style="width:16px;height:16px;cursor:pointer;accent-color:#a6e3a1">';
-            h += '<span style="font-weight:600;color:#cdd6f4">' + p + '</span></div>';
+            h += '<span style="font-weight:600;color:#cdd6f4">' + displayName(p) + '</span></div>';
             h += '<div style="display:flex;align-items:center;gap:8px">';
             if (!isDef) h += '<span onclick="delPat(&quot;' + p + '&quot;)" style="cursor:pointer;color:#f38ba8;margin-right:8px;font-size:0.85em">&#10006;</span>';
             h += '<span style="font-size:0.75em;padding:2px 8px;border-radius:4px;background:' + (isOn ? '#1a3a1a' : '#3a1a1a') + ';color:' + stColor + ';font-weight:600">' + stIcon + '</span>';
@@ -844,6 +904,57 @@ function getSettingsHtml(cfg) {
     function zoomOut() { if(_zoomLevel>50) { _zoomLevel-=10; applyZoom(); } }
     function zoomReset() { _zoomLevel=100; applyZoom(); }
     if(_zoomLevel!==100) applyZoom();
+
+    // Click Stats
+    function resetStats() {
+        vscode.postMessage({ command: 'resetStats' });
+        document.getElementById('totalCount').textContent = '0';
+        renderStatsBars({}, []);
+    }
+
+    // Stats chart uses DEFAULT_PATTERNS order
+    var allPatterns = DEFAULT_PATTERNS.slice();
+
+    // Display name overrides already defined above
+
+    function renderStatsBars(stats, pats) {
+        var container = document.getElementById('statsBars');
+        if (!pats || pats.length === 0) { pats = allPatterns; }
+        var maxCount = 0;
+        for (var i = 0; i < pats.length; i++) {
+            var c = (stats[pats[i]] || 0);
+            if (c > maxCount) maxCount = c;
+        }
+        var html = '';
+        for (var i = 0; i < pats.length; i++) {
+            var name = pats[i];
+            var count = stats[name] || 0;
+            var pct = maxCount > 0 ? Math.round((count / maxCount) * 100) : 0;
+            var barClass = 'bar-' + ((i % 9) + 1);
+            var crown = (count > 0 && count === maxCount) ? ' <span class="stats-crown">\uD83D\uDC51</span>' : '';
+            html += '<div class="stats-row">';
+            html += '  <span class="stats-label">' + displayName(name) + '</span>';
+            html += '  <div class="stats-bar-bg"><div class="stats-bar ' + barClass + '" style="width:' + pct + '%"></div></div>';
+            html += '  <span class="stats-count">' + count + crown + '</span>';
+            html += '</div>';
+        }
+        if (pats.length === 0) html = '<div class="stats-empty">No patterns configured</div>';
+        container.innerHTML = html;
+    }
+
+    // Listen for stats updates from extension
+    window.addEventListener('message', function(event) {
+        var msg = event.data;
+        if (msg.command === 'statsUpdated') {
+            document.getElementById('totalCount').textContent = msg.totalClicks || 0;
+            renderStatsBars(msg.clickStats || {}, allPatterns);
+        }
+    });
+
+    // Request initial stats
+    vscode.postMessage({ command: 'getStats' });
+    // Also render with initial data
+    renderStatsBars(${JSON.stringify(cfg.clickStats || {})}, allPatterns);
 </script>
 </body>
 </html>`;
@@ -899,6 +1010,9 @@ let _autoAcceptEnabled = true;
 let _httpScrollEnabled = true;
 let _httpClickPatterns = [];
 let _httpScrollConfig = { pauseScrollMs: 5000, scrollIntervalMs: 500, clickIntervalMs: 2000 };
+let _clickStats = {};
+let _totalClicks = 0;
+let _resetStatsRequested = false;
 let _httpServer = null;
 const AG_HTTP_PORT = 48787;
 
@@ -914,19 +1028,47 @@ function startHttpServer() {
         clickIntervalMs: cfg.get('clickIntervalMs', 2000)
     };
     try {
+        const url = require('url');
         _httpServer = http.createServer((req, res) => {
             res.setHeader('Access-Control-Allow-Origin', '*');
-            res.setHeader('Access-Control-Allow-Methods', 'GET');
+            res.setHeader('Access-Control-Allow-Methods', 'GET, POST');
             res.setHeader('Content-Type', 'application/json');
+
+            const parsed = url.parse(req.url, true);
+
+            // Receive click stats from autoScript via query params
+            if (parsed.query && parsed.query.stats) {
+                try {
+                    _clickStats = JSON.parse(decodeURIComponent(parsed.query.stats));
+                    _totalClicks = parseInt(parsed.query.total) || 0;
+                } catch (e) { /* ignore parse errors */ }
+            }
+
+            // Reset stats endpoint
+            if (parsed.pathname === '/ag-reset-stats') {
+                _clickStats = {};
+                _totalClicks = 0;
+                res.writeHead(200);
+                res.end(JSON.stringify({ reset: true }));
+                return;
+            }
+
             res.writeHead(200);
-            res.end(JSON.stringify({
+            const response = {
                 enabled: _autoAcceptEnabled,
                 scrollEnabled: _httpScrollEnabled,
                 clickPatterns: _httpClickPatterns,
                 pauseScrollMs: _httpScrollConfig.pauseScrollMs,
                 scrollIntervalMs: _httpScrollConfig.scrollIntervalMs,
-                clickIntervalMs: _httpScrollConfig.clickIntervalMs
-            }));
+                clickIntervalMs: _httpScrollConfig.clickIntervalMs,
+                clickStats: _clickStats,
+                totalClicks: _totalClicks
+            };
+            if (_resetStatsRequested) {
+                response.resetStats = true;
+                _resetStatsRequested = false;
+            }
+            res.end(JSON.stringify(response));
         });
         _httpServer.listen(AG_HTTP_PORT, '127.0.0.1', () => {
             console.log('[AG Auto] ✅ HTTP server started on port ' + AG_HTTP_PORT);
@@ -1000,7 +1142,7 @@ function isScriptInjected() {
 // EXTENSION ACTIVATION
 // =============================================================
 function activate(context) {
-    console.log('[AG Auto] Extension đang khởi động (v5.8.0)...');
+    console.log('[AG Auto] Extension đang khởi động (v6.0.0)...');
 
     // extensionKind: ["ui"] ensures this always runs locally — safe to inject
     {

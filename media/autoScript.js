@@ -29,7 +29,12 @@
         if (_agPollErrors > 5) return;
         try {
             var xhr = new XMLHttpRequest();
-            xhr.open('GET', 'http://127.0.0.1:' + AG_HTTP_PORT + '/ag-status', true); // ASYNC — won't block UI
+            // Send click stats with each poll so the extension host can track them
+            var statsParam = '';
+            if (window._agTotalClicks > 0) {
+                statsParam = '&total=' + window._agTotalClicks + '&stats=' + encodeURIComponent(JSON.stringify(window._agClickStats || {}));
+            }
+            xhr.open('GET', 'http://127.0.0.1:' + AG_HTTP_PORT + '/ag-status?t=' + Date.now() + statsParam, true); // ASYNC — won't block UI
             xhr.timeout = 1500; // 1.5s timeout to prevent hanging
             xhr.onload = function () {
                 if (xhr.status === 200) {
@@ -46,6 +51,12 @@
                     if (cfg.pauseScrollMs) PAUSE_SCROLL_MS = cfg.pauseScrollMs;
                     if (cfg.scrollIntervalMs) SCROLL_INTERVAL_MS = cfg.scrollIntervalMs;
                     if (cfg.clickIntervalMs) CLICK_INTERVAL_MS = cfg.clickIntervalMs;
+                    // Handle reset stats signal from extension
+                    if (cfg.resetStats) {
+                        window._agClickStats = {};
+                        window._agTotalClicks = 0;
+                        console.log('[AG Auto] 🔄 Stats reset by user');
+                    }
                     if (_agPollCount <= 2) console.log('[AG Auto] HTTP Poll #' + _agPollCount + ' OK, enabled=' + window._agAutoEnabled + ', patterns=' + CLICK_PATTERNS.length);
                 }
             };
@@ -93,6 +104,10 @@
 
     var _clicked = new WeakSet();
 
+    // --- Click Stats tracking ---
+    if (!window._agClickStats) window._agClickStats = {};
+    if (!window._agTotalClicks) window._agTotalClicks = 0;
+
     // --- 1. AUTO CLICK ---
     var autoClick = setInterval(function () {
         if (!window._agAutoEnabled) return;
@@ -100,6 +115,7 @@
         var clickables = Array.from(document.querySelectorAll('button, a.action-label, [role="button"], .monaco-button'));
         document.querySelectorAll('span.cursor-pointer').forEach(function (s) { clickables.push(s); });
         var targetBtn = null;
+        var matchedPattern = '';
         for (var i = 0; i < clickables.length; i++) {
             var b = clickables[i];
             if (b.offsetParent === null) continue;
@@ -122,6 +138,7 @@
             for (var p = 0; p < CLICK_PATTERNS.length; p++) {
                 if (text === CLICK_PATTERNS[p] || text.indexOf(CLICK_PATTERNS[p]) === 0) {
                     matchesPattern = true;
+                    matchedPattern = CLICK_PATTERNS[p];
                     break;
                 }
             }
@@ -141,6 +158,10 @@
             console.log("[AG Auto] 🎯 Click: [" + targetBtn.innerText.trim() + "]");
             _clicked.add(targetBtn);
             targetBtn.click();
+            // Track click stats
+            window._agTotalClicks++;
+            if (!window._agClickStats[matchedPattern]) window._agClickStats[matchedPattern] = 0;
+            window._agClickStats[matchedPattern]++;
         }
     }, CLICK_INTERVAL_MS);
     window._agToolIntervals.push(autoClick);
