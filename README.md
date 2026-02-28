@@ -115,19 +115,19 @@ Mặc định **OFF**: `Accept all` (bật thủ công khi cần)
 
 ## 🔄 Changelog
 
-### v6.0.0 (Latest) 🎉
-- 📊 **Click Stats Dashboard** — Bảng thống kê click realtime ngay trong Settings, hiển thị số lần click từng nút với progress bar so sánh
-- 👑 **Most Clicked Badge** — Nút click nhiều nhất tự động nhận vương miện 👑
-- 🎯 **Total Clicks Counter** — Badge tổng số click ngay cạnh tiêu đề
-- 🔄 **Reset Stats** — Nút reset xóa toàn bộ thống kê, đồng bộ cả autoScript và extension host
-- ⚡ **Live Update** — Stats tự cập nhật mỗi 2 giây, bar có animation mượt
-- 🏷️ **Display Name Mapping** — Hiển thị tên đầy đủ (VD: "Allow This Conversion") mà không ảnh hưởng logic click
+### v6.0.0 (Latest)
+- **Click Stats Dashboard** — Bảng thống kê click realtime ngay trong Settings, hiển thị số lần click từng nút với progress bar so sánh
+- **Most Clicked Badge** — Nút click nhiều nhất tự động nhận vương miện
+- **Total Clicks Counter** — Badge tổng số click ngay cạnh tiêu đề
+- **Reset Stats** — Nút reset xóa toàn bộ thống kê, đồng bộ cả autoScript và extension host
+- **Live Update** — Stats tự cập nhật mỗi 2 giây, bar có animation mượt
+- **Display Name Mapping** — Hiển thị tên đầy đủ (VD: "Allow This Conversion") mà không ảnh hưởng logic click
 
 ### v5.8.0
-- 🔐 **SSH Remote Support** — Hoạt động bình thường khi dùng Remote-SSH, không bị văng hay lỗi nữa
-- ⚡ **Async HTTP Polling** — Chuyển từ sync XHR sang async với timeout, không block UI
-- 🛡️ **Auto-stop polling** — Tự dừng poll sau 5 lỗi liên tiếp, tiết kiệm tài nguyên
-- 🔧 **Fix command not found** — Commands luôn được đăng ký, kể cả lần đầu inject
+- **SSH Remote Support** — Hoạt động bình thường khi dùng Remote-SSH
+- **Async HTTP Polling** — Chuyển từ sync XHR sang async, không block UI
+- **Auto-stop polling** — Tự dừng poll sau 5 lỗi liên tiếp
+- **Fix command not found** — Commands luôn được đăng ký
 
 ### v5.5.0
 - 🔄 **Auto-fix sau update** — Tự phát hiện khi Antigravity update và tự inject lại script, không cần thao tác thủ công
