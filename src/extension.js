@@ -423,6 +423,9 @@ function openSettingsPanel(context) {
             _clickStats = {};
             _totalClicks = 0;
             _resetStatsRequested = true;
+            // Clear persisted stats
+            context.globalState.update('clickStats', {});
+            context.globalState.update('totalClicks', 0);
             panel.webview.postMessage({ command: 'statsUpdated', clickStats: {}, totalClicks: 0 });
         }
         if (msg.command === 'getStats') {
@@ -1023,6 +1026,7 @@ let _httpScrollConfig = { pauseScrollMs: 5000, scrollIntervalMs: 500, clickInter
 let _clickStats = {};
 let _totalClicks = 0;
 let _resetStatsRequested = false;
+let _extensionContext = null;
 let _httpServer = null;
 const AG_HTTP_PORT = 48787;
 
@@ -1051,6 +1055,11 @@ function startHttpServer() {
                 try {
                     _clickStats = JSON.parse(decodeURIComponent(parsed.query.stats));
                     _totalClicks = parseInt(parsed.query.total) || 0;
+                    // Persist to globalState
+                    if (_extensionContext) {
+                        _extensionContext.globalState.update('clickStats', _clickStats);
+                        _extensionContext.globalState.update('totalClicks', _totalClicks);
+                    }
                 } catch (e) { /* ignore parse errors */ }
             }
 
@@ -1152,7 +1161,12 @@ function isScriptInjected() {
 // EXTENSION ACTIVATION
 // =============================================================
 function activate(context) {
-    console.log('[AG Auto] Extension đang khởi động (v6.0.0)...');
+    console.log('[AG Auto] Extension đang khởi động (v6.1.0)...');
+    _extensionContext = context;
+
+    // Restore persisted click stats
+    _clickStats = context.globalState.get('clickStats', {});
+    _totalClicks = context.globalState.get('totalClicks', 0);
 
     // extensionKind: ["ui"] ensures this always runs locally — safe to inject
     {

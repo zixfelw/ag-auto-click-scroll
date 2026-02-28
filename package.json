@@ -2,7 +2,7 @@
     "name": "ag-auto-click-scroll",
     "displayName": "AG Auto Click & Scroll",
     "description": "Tự động nhấn nút Run/Allow và cuộn khung chat Antigravity. Có giao diện cài đặt trực quan.",
-    "version": "6.0.0",
+    "version": "6.1.0",
     "icon": "media/icon.png",
     "publisher": "zixfel",
     "repository": {

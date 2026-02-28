@@ -19,7 +19,7 @@ Quét mã QR bên dưới qua **Momo, VietQR hoặc Napas 247**:
 
 ---
 
-# 🚀 AG Auto Click & Scroll v6.0
+# 🚀 AG Auto Click & Scroll v6.1
 
 **Extension tự động nhấn nút Run, Allow, Accept all và cuộn khung chat Antigravity.**  
 Thiết kế thông minh — chỉ click **nút approval** (có nút Reject bên cạnh), không click nhầm UI khác.
@@ -29,6 +29,15 @@ Thiết kế thông minh — chỉ click **nút approval** (có nút Reject bên
 ---
 
 ## ✨ Tính năng chính
+
+- **Auto Click** — Tự động nhấn Run, Allow, Always Allow, Keep Waiting, Retry, Continue...
+- **Auto Scroll** — Cuộn khung chat tự động, dừng khi user cuộn tay
+- **Click Stats** — Bảng thống kê click realtime với progress bar so sánh
+- **Persistent Stats** — Lưu thống kê qua restart, chỉ mất khi ấn Reset
+- **Toggle Panel** — Click status bar lần 1 mở Settings, lần 2 đóng
+- **SSH Remote** — Hoạt động bình thường trên Remote-SSH
+- **Đa ngôn ngữ** — Hỗ trợ Tiếng Việt, English, 中文
+
 
 | Tính năng | Mô tả |
 |-----------|-------|
