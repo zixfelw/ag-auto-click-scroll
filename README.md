@@ -6,6 +6,19 @@
 
 ---
 
+## ☕ Ủng hộ tác giả
+
+Nếu extension giúp ích cho bạn, mời tác giả một ly cà phê nhé! ☕  
+Quét mã QR bên dưới qua **Momo, VietQR hoặc Napas 247**:
+
+<p align="center">
+  <img src="media/momo-qr.png" alt="Momo QR - Ủng hộ tác giả" width="250"/>
+</p>
+
+> 🙏 Mọi sự ủng hộ đều là động lực để mình tiếp tục phát triển extension miễn phí cho cộng đồng!
+
+---
+
 # 🚀 AG Auto Click & Scroll v5.4
 
 **Extension tự động nhấn nút Run, Allow, Accept all và cuộn khung chat Antigravity.**  
