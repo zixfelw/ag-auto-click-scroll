@@ -305,16 +305,31 @@ function escapeRegex(str) {
     return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+let _settingsPanel = null;
+
 /**
  * Mở Webview Settings Panel
  */
 function openSettingsPanel(context) {
+    // Toggle: if panel is already open, close it
+    if (_settingsPanel) {
+        _settingsPanel.dispose();
+        _settingsPanel = null;
+        return;
+    }
+
     const panel = vscode.window.createWebviewPanel(
         'agAutoSettings',
         'AG Auto Click & Scroll - Settings',
         vscode.ViewColumn.One,
         { enableScripts: true }
     );
+    _settingsPanel = panel;
+
+    // Clear reference when panel is closed
+    panel.onDidDispose(() => {
+        _settingsPanel = null;
+    });
 
     const config = vscode.workspace.getConfiguration('ag-auto');
 
@@ -334,11 +349,8 @@ function openSettingsPanel(context) {
     // Nhận message từ Webview
     panel.webview.onDidReceiveMessage(async (msg) => {
         if (msg.command === 'changeLang') {
-            // Chỉ đổi ngôn ngữ -> save + render lại HTML ngay không cần reload VS Code
             const cfg = vscode.workspace.getConfiguration('ag-auto');
             await cfg.update('language', msg.lang, vscode.ConfigurationTarget.Global);
-
-            // Render lại panel với ngôn ngữ mới
             panel.webview.html = getSettingsHtml({
                 enabled: cfg.get('enabled', true),
                 scrollEnabled: cfg.get('scrollEnabled', true),
@@ -354,7 +366,6 @@ function openSettingsPanel(context) {
             return;
         }
         if (msg.command === 'toggle') {
-            // INSTANT toggle from switch — no Save needed
             _autoAcceptEnabled = msg.enabled;
             const cfg = vscode.workspace.getConfiguration('ag-auto');
             await cfg.update('enabled', msg.enabled, vscode.ConfigurationTarget.Global);
@@ -387,7 +398,6 @@ function openSettingsPanel(context) {
                 await context.globalState.update('language', msg.data.language);
             }
 
-            // Update ALL HTTP server state (enabled + patterns + scroll + click timing)
             _autoAcceptEnabled = msg.data.enabled;
             _httpClickPatterns = msg.data.clickPatterns.filter(p => !msg.data.disabledClickPatterns.includes(p));
             _httpScrollConfig = {
@@ -412,7 +422,7 @@ function openSettingsPanel(context) {
         if (msg.command === 'resetStats') {
             _clickStats = {};
             _totalClicks = 0;
-            _resetStatsRequested = true; // Tell autoScript to clear its counters on next poll
+            _resetStatsRequested = true;
             panel.webview.postMessage({ command: 'statsUpdated', clickStats: {}, totalClicks: 0 });
         }
         if (msg.command === 'getStats') {
