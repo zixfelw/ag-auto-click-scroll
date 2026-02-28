@@ -1000,12 +1000,10 @@ function isScriptInjected() {
 // EXTENSION ACTIVATION
 // =============================================================
 function activate(context) {
-    console.log('[AG Auto] Extension đang khởi động (v5.7.1)...');
+    console.log('[AG Auto] Extension đang khởi động (v5.8.0)...');
 
-    // Skip injection in Remote SSH / container context — workbench files don't exist there
-    if (vscode.env.remoteName) {
-        console.log('[AG Auto] 🚫 Remote context (' + vscode.env.remoteName + ') — skipping inject, running UI-only mode');
-    } else {
+    // extensionKind: ["ui"] ensures this always runs locally — safe to inject
+    {
 
         // Check if script is ACTUALLY present in workbench files (not just a stored key)
         // This handles Antigravity updates that overwrite workbench files
@@ -1054,10 +1052,6 @@ function activate(context) {
     // Command: Enable
     context.subscriptions.push(
         vscode.commands.registerCommand('ag-auto.enable', async () => {
-            if (vscode.env.remoteName) {
-                vscode.window.showWarningMessage('[AG Auto] ⚠️ Không thể inject trong Remote SSH. Hãy chạy trên cửa sổ local.');
-                return;
-            }
             const success = installScript(context);
             if (success) {
                 updateStatusBarItem();

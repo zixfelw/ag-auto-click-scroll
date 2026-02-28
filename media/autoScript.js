@@ -3,18 +3,6 @@
     if (window._agAutoLoaded) return;
     window._agAutoLoaded = true;
 
-    // --- Guard: skip entirely in Remote SSH / remote context ---
-    // Remote windows don't have the local HTTP server → sync XHR blocks UI → crash
-    if (document.body && (
-        document.body.classList.contains('web') ||
-        document.querySelector('[id*="remote-indicator"]') ||
-        window.location.search.includes('tkn=') ||
-        window.location.href.includes('vscode-remote')
-    )) {
-        console.log('[AG Auto] 🚫 Remote context detected — skipping auto script');
-        return;
-    }
-
     // --- Dọn dẹp bản cũ ---
     if (window._agToolIntervals) {
         window._agToolIntervals.forEach(clearInterval);

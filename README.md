@@ -19,7 +19,7 @@ Quét mã QR bên dưới qua **Momo, VietQR hoặc Napas 247**:
 
 ---
 
-# 🚀 AG Auto Click & Scroll v5.4
+# 🚀 AG Auto Click & Scroll v5.8
 
 **Extension tự động nhấn nút Run, Allow, Accept all và cuộn khung chat Antigravity.**  
 Thiết kế thông minh — chỉ click **nút approval** (có nút Reject bên cạnh), không click nhầm UI khác.
@@ -115,10 +115,11 @@ Mặc định **OFF**: `Accept all` (bật thủ công khi cần)
 
 ## 🔄 Changelog
 
-### v5.7.0 (Latest) 🎉
-- 🔐 **SSH Compatible** — Không can thiệp vào SSH Remote, khắc phục lỗi văng khi dùng Remote-SSH
-- ⚡ **Async HTTP Polling** — Chuyển từ sync XHR sang async, không block UI
-- 🛡️ **Auto-stop polling** — Tự dừng poll khi phát hiện remote context
+### v5.8.0 (Latest) 🎉
+- 🔐 **SSH Remote Support** — Hoạt động bình thường khi dùng Remote-SSH, không bị văng hay lỗi nữa
+- ⚡ **Async HTTP Polling** — Chuyển từ sync XHR sang async với timeout, không block UI
+- 🛡️ **Auto-stop polling** — Tự dừng poll sau 5 lỗi liên tiếp, tiết kiệm tài nguyên
+- 🔧 **Fix command not found** — Commands luôn được đăng ký, kể cả lần đầu inject
 
 ### v5.5.0
 - 🔄 **Auto-fix sau update** — Tự phát hiện khi Antigravity update và tự inject lại script, không cần thao tác thủ công
