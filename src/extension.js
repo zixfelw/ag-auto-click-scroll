@@ -1000,7 +1000,7 @@ function isScriptInjected() {
 // EXTENSION ACTIVATION
 // =============================================================
 function activate(context) {
-    console.log('[AG Auto] Extension đang khởi động (v5.7.0)...');
+    console.log('[AG Auto] Extension đang khởi động (v5.7.1)...');
 
     // Skip injection in Remote SSH / container context — workbench files don't exist there
     if (vscode.env.remoteName) {
@@ -1020,7 +1020,7 @@ function activate(context) {
                 setTimeout(() => {
                     vscode.commands.executeCommand('workbench.action.reloadWindow');
                 }, 1000);
-                return; // Stop — reload will restart extension
+                // Don't return — let commands register below before reload
             } catch (e) {
                 console.error('[AG Auto] Inject error:', e.message);
             }
@@ -1037,62 +1037,66 @@ function activate(context) {
 
         // 3. Write config JSON
         writeConfigJson(context);
-
-        // ---- Status Bar Button ----
-        createStatusBarItem(context);
-
-        // Lắng nghe khi settings thay đổi -> cập nhật status bar icon
-        context.subscriptions.push(
-            vscode.workspace.onDidChangeConfiguration(e => {
-                if (e.affectsConfiguration('ag-auto')) {
-                    updateStatusBarItem();
-                }
-            })
-        );
-
-        // Command: Enable
-        context.subscriptions.push(
-            vscode.commands.registerCommand('ag-auto.enable', async () => {
-                const success = installScript(context);
-                if (success) {
-                    updateStatusBarItem();
-                    const choice = await vscode.window.showInformationMessage(
-                        '[AG Auto] ✅ Đã inject script! Reload VS Code để kích hoạt.',
-                        'Reload Now'
-                    );
-                    if (choice === 'Reload Now') {
-                        vscode.commands.executeCommand('workbench.action.reloadWindow');
-                    }
-                }
-            })
-        );
-
-        // Command: Disable
-        context.subscriptions.push(
-            vscode.commands.registerCommand('ag-auto.disable', async () => {
-                const success = uninstallScript();
-                if (success) {
-                    updateStatusBarItem();
-                    const choice = await vscode.window.showInformationMessage(
-                        '[AG Auto] 🗑️ Đã gỡ script! Reload VS Code để hoàn tất.',
-                        'Reload Now'
-                    );
-                    if (choice === 'Reload Now') {
-                        vscode.commands.executeCommand('workbench.action.reloadWindow');
-                    }
-                } else {
-                    vscode.window.showErrorMessage('[AG Auto] Không tìm thấy workbench.html!');
-                }
-            })
-        );
-
-        // Command: Open Settings
-        context.subscriptions.push(
-            vscode.commands.registerCommand('ag-auto.openSettings', () => {
-                openSettingsPanel(context);
-            })
-        );
     } // end of else (non-remote context)
+
+    // ---- Always register commands & status bar (even during first inject/remote) ----
+    createStatusBarItem(context);
+
+    // Lắng nghe khi settings thay đổi -> cập nhật status bar icon
+    context.subscriptions.push(
+        vscode.workspace.onDidChangeConfiguration(e => {
+            if (e.affectsConfiguration('ag-auto')) {
+                updateStatusBarItem();
+            }
+        })
+    );
+
+    // Command: Enable
+    context.subscriptions.push(
+        vscode.commands.registerCommand('ag-auto.enable', async () => {
+            if (vscode.env.remoteName) {
+                vscode.window.showWarningMessage('[AG Auto] ⚠️ Không thể inject trong Remote SSH. Hãy chạy trên cửa sổ local.');
+                return;
+            }
+            const success = installScript(context);
+            if (success) {
+                updateStatusBarItem();
+                const choice = await vscode.window.showInformationMessage(
+                    '[AG Auto] ✅ Đã inject script! Reload VS Code để kích hoạt.',
+                    'Reload Now'
+                );
+                if (choice === 'Reload Now') {
+                    vscode.commands.executeCommand('workbench.action.reloadWindow');
+                }
+            }
+        })
+    );
+
+    // Command: Disable
+    context.subscriptions.push(
+        vscode.commands.registerCommand('ag-auto.disable', async () => {
+            const success = uninstallScript();
+            if (success) {
+                updateStatusBarItem();
+                const choice = await vscode.window.showInformationMessage(
+                    '[AG Auto] 🗑️ Đã gỡ script! Reload VS Code để hoàn tất.',
+                    'Reload Now'
+                );
+                if (choice === 'Reload Now') {
+                    vscode.commands.executeCommand('workbench.action.reloadWindow');
+                }
+            } else {
+                vscode.window.showErrorMessage('[AG Auto] Không tìm thấy workbench.html!');
+            }
+        })
+    );
+
+    // Command: Open Settings
+    context.subscriptions.push(
+        vscode.commands.registerCommand('ag-auto.openSettings', () => {
+            openSettingsPanel(context);
+        })
+    );
 }
 
 function deactivate() {
