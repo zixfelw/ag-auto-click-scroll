@@ -1161,12 +1161,76 @@ function isScriptInjected() {
 // EXTENSION ACTIVATION
 // =============================================================
 function activate(context) {
-    console.log('[AG Auto] Extension đang khởi động (v6.1.0)...');
+    console.log('[AG Auto] Extension đang khởi động (v6.2.0)...');
     _extensionContext = context;
 
     // Restore persisted click stats
     _clickStats = context.globalState.get('clickStats', {});
     _totalClicks = context.globalState.get('totalClicks', 0);
+
+    // Background "Keep Waiting" dialog clicker (Win32 native dialog)
+    if (process.platform === 'win32') {
+        const { execFile } = require('child_process');
+        const keepWaitingScript = `
+Add-Type @"
+using System;
+using System.Text;
+using System.Runtime.InteropServices;
+public class AgWin32 {
+    public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+    [DllImport("user32.dll")] public static extern bool EnumWindows(EnumWindowsProc cb, IntPtr lParam);
+    [DllImport("user32.dll")] public static extern bool EnumChildWindows(IntPtr hwnd, EnumWindowsProc cb, IntPtr lParam);
+    [DllImport("user32.dll")] public static extern int GetWindowText(IntPtr hWnd, StringBuilder s, int n);
+    [DllImport("user32.dll")] public static extern int GetClassName(IntPtr hWnd, StringBuilder s, int n);
+    [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd);
+    [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr hWnd, uint Msg, IntPtr w, IntPtr l);
+}
+"@
+$found = $false
+[AgWin32]::EnumWindows({
+    param($hWnd, $lp)
+    if (-not [AgWin32]::IsWindowVisible($hWnd)) { return $true }
+    [AgWin32]::EnumChildWindows($hWnd, {
+        param($ch, $lp2)
+        $cls = New-Object System.Text.StringBuilder 64
+        [AgWin32]::GetClassName($ch, $cls, 64) | Out-Null
+        if ($cls.ToString() -eq 'Button') {
+            $txt = New-Object System.Text.StringBuilder 256
+            [AgWin32]::GetWindowText($ch, $txt, 256) | Out-Null
+            $t = $txt.ToString()
+            if ($t -match 'Keep Waiting') {
+                [AgWin32]::PostMessage($ch, 0x00F5, [IntPtr]::Zero, [IntPtr]::Zero)
+                Write-Output 'CLICKED'
+                $script:found = $true
+            }
+        }
+        return $true
+    }, [IntPtr]::Zero) | Out-Null
+    if ($script:found) { return $false }
+    return $true
+}, [IntPtr]::Zero) | Out-Null
+`.trim();
+
+        const keepWaitingInterval = setInterval(() => {
+            if (!_autoAcceptEnabled) return;
+            if (!_httpClickPatterns.includes('Keep Waiting')) return;
+
+            execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', keepWaitingScript], { timeout: 5000 }, (err, stdout) => {
+                if (stdout && stdout.trim() === 'CLICKED') {
+                    console.log('[AG Auto] 🎯 Native dialog: Keep Waiting clicked via Win32');
+                    _totalClicks++;
+                    if (!_clickStats['Keep Waiting']) _clickStats['Keep Waiting'] = 0;
+                    _clickStats['Keep Waiting']++;
+                    if (_extensionContext) {
+                        _extensionContext.globalState.update('clickStats', _clickStats);
+                        _extensionContext.globalState.update('totalClicks', _totalClicks);
+                    }
+                }
+            });
+        }, 3000);
+        context.subscriptions.push({ dispose: () => clearInterval(keepWaitingInterval) });
+        console.log('[AG Auto] 🛡️ Win32 Keep Waiting watcher started');
+    }
 
     // extensionKind: ["ui"] ensures this always runs locally — safe to inject
     {
