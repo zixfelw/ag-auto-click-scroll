@@ -1000,7 +1000,7 @@ function isScriptInjected() {
 // EXTENSION ACTIVATION
 // =============================================================
 function activate(context) {
-    console.log('[AG Auto] Extension đang khởi động (v5.5.0)...');
+    console.log('[AG Auto] Extension đang khởi động (v5.6.0)...');
 
     // Check if script is ACTUALLY present in workbench files (not just a stored key)
     // This handles Antigravity updates that overwrite workbench files
