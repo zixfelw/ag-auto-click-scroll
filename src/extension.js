@@ -1131,14 +1131,14 @@ function startHttpServer() {
 
             const parsed = url.parse(req.url, true);
 
-            // Receive click stats from autoScript via query params
+            // Receive click stats DELTA from autoScript via query params
             if (parsed.query && parsed.query.stats) {
                 try {
                     const incoming = JSON.parse(decodeURIComponent(parsed.query.stats));
-                    const incomingTotal = parseInt(parsed.query.total) || 0;
-                    // Merge: keep server-side counts (e.g. Win32 Keep Waiting) if autoScript doesn't have them
+                    // ADD deltas to persisted stats (not replace!)
                     for (const key in incoming) {
-                        _clickStats[key] = incoming[key];
+                        if (!_clickStats[key]) _clickStats[key] = 0;
+                        _clickStats[key] += incoming[key];
                     }
                     // Recalculate total from all stats
                     let total = 0;
@@ -1250,7 +1250,7 @@ function isScriptInjected() {
 // EXTENSION ACTIVATION
 // =============================================================
 function activate(context) {
-    console.log('[AG Auto] Extension đang khởi động (v6.6.0)...');
+    console.log('[AG Auto] Extension đang khởi động (v6.7.0)...');
     _extensionContext = context;
 
     // Restore persisted click stats

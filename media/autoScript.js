@@ -57,16 +57,22 @@
     var AG_HTTP_PORT = 48787;
     var _agPollCount = 0;
     var _agPollErrors = 0;
+    // Track ONLY this session's clicks (delta since last send)
+    var _agSessionStats = {};
+    var _agSessionTotal = 0;
     var _agConfigReload = setInterval(function () {
         _agPollCount++;
         // Stop polling after too many consecutive errors (e.g. remote/SSH context)
         if (_agPollErrors > 5) return;
         try {
             var xhr = new XMLHttpRequest();
-            // Send click stats with each poll so the extension host can track them
+            // Send ONLY session delta stats so server can ADD them to persisted totals
             var statsParam = '';
-            if (window._agTotalClicks > 0) {
-                statsParam = '&total=' + window._agTotalClicks + '&stats=' + encodeURIComponent(JSON.stringify(window._agClickStats || {}));
+            if (_agSessionTotal > 0) {
+                statsParam = '&total=' + _agSessionTotal + '&stats=' + encodeURIComponent(JSON.stringify(_agSessionStats));
+                // Reset delta after sending — server will accumulate
+                _agSessionStats = {};
+                _agSessionTotal = 0;
             }
             xhr.open('GET', 'http://127.0.0.1:' + AG_HTTP_PORT + '/ag-status?t=' + Date.now() + statsParam, true); // ASYNC — won't block UI
             xhr.timeout = 1500; // 1.5s timeout to prevent hanging
@@ -85,10 +91,15 @@
                     if (cfg.pauseScrollMs) PAUSE_SCROLL_MS = cfg.pauseScrollMs;
                     if (cfg.scrollIntervalMs) SCROLL_INTERVAL_MS = cfg.scrollIntervalMs;
                     if (cfg.clickIntervalMs) CLICK_INTERVAL_MS = cfg.clickIntervalMs;
+                    // Sync cumulative totals from server for display
+                    if (cfg.clickStats) window._agClickStats = cfg.clickStats;
+                    if (typeof cfg.totalClicks === 'number') window._agTotalClicks = cfg.totalClicks;
                     // Handle reset stats signal from extension
                     if (cfg.resetStats) {
                         window._agClickStats = {};
                         window._agTotalClicks = 0;
+                        _agSessionStats = {};
+                        _agSessionTotal = 0;
                         console.log('[AG Auto] 🔄 Stats reset by user');
                     }
                     if (_agPollCount <= 2) console.log('[AG Auto] HTTP Poll #' + _agPollCount + ' OK, enabled=' + window._agAutoEnabled + ', patterns=' + CLICK_PATTERNS.length);
@@ -192,7 +203,11 @@
             console.log("[AG Auto] 🎯 Click: [" + targetBtn.innerText.trim() + "]");
             _clicked.add(targetBtn);
             targetBtn.click();
-            // Track click stats
+            // Track click in session delta (server will accumulate)
+            _agSessionTotal++;
+            if (!_agSessionStats[matchedPattern]) _agSessionStats[matchedPattern] = 0;
+            _agSessionStats[matchedPattern]++;
+            // Also update window display stats immediately
             window._agTotalClicks++;
             if (!window._agClickStats[matchedPattern]) window._agClickStats[matchedPattern] = 0;
             window._agClickStats[matchedPattern]++;
