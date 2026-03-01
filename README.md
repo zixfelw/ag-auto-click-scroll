@@ -17,7 +17,7 @@ Quét mã QR bên dưới qua **Momo, VietQR hoặc Napas 247**:
 
 ---
 
-# AG Auto Click & Scroll v6.5
+# AG Auto Click & Scroll v6.6
 
 **Extension tự động nhấn nút Run, Allow, Accept all và cuộn khung chat Antigravity.**  
 Thiết kế thông minh — chỉ click **nút approval** (có nút Reject bên cạnh), không click nhầm UI khác.
@@ -26,7 +26,7 @@ Thiết kế thông minh — chỉ click **nút approval** (có nút Reject bên
 
 ---
 
-## Có gì mới trong v6.5
+## Có gì mới trong v6.6
 
 ### Fix thông báo "Corrupt Installation"
 - Tự động cập nhật checksums sau khi inject → xóa hoàn toàn cảnh báo "corrupt"
@@ -34,15 +34,25 @@ Thiết kế thông minh — chỉ click **nút approval** (có nút Reject bên
 - Tự phát hiện extension upgrade → re-inject script mới tự động
 
 ### Click Stats Dashboard
-- Bảng thống kê click realtime với progress bar, vương miện, badge
-- Lưu thống kê qua restart, nút Reset xóa toàn bộ
+- Bảng thống kê click realtime ngay trong Settings với progress bar so sánh
+- Nút click nhiều nhất tự động nhận vương miện
+- Badge tổng số click ngay cạnh tiêu đề
+- Nút Reset xóa toàn bộ thống kê, đồng bộ cả autoScript và extension host
+- Stats tự cập nhật mỗi 2 giây, bar có animation mượt
+- Lưu thống kê qua restart, chỉ mất khi ấn Reset
 
 ### Native Dialog Auto-Click (Win32)
-- Tự động nhấn **Keep Waiting** trong dialog "window not responding"
+- Tự động nhấn **Keep Waiting** trong dialog "window not responding" bằng Win32 API
+- Quét mọi cửa sổ Windows để tìm nút Keep Waiting, không phụ thuộc title dialog
+- Đếm số lần click vào stats, merge với stats từ autoScript
 
-### Khác
-- Toggle Settings Panel — Click status bar để mở/đóng Settings
-- Display Name Mapping — Hiển thị tên đầy đủ cho patterns
+### Toggle Settings Panel
+- Click status bar lần 1 → mở Settings, lần 2 → đóng Settings
+- Cả 2 nút "Accept ON" và "Scroll ON" đều hỗ trợ toggle
+
+### Display Name Mapping
+- Hiển thị tên đầy đủ (VD: "Allow This Conversion") mà không ảnh hưởng logic click
+- Tên nội bộ giữ nguyên để đảm bảo pattern matching chính xác
 
 ---
 
@@ -109,7 +119,7 @@ Mặc định **OFF**: `Accept all` (bật thủ công khi cần)
 
 ## Changelog
 
-### v6.5.0 (Latest)
+### v6.6.0 (Latest)
 - **Fix 'Corrupt Installation' Warning** — Tự động cập nhật checksums trong `product.json` sau khi inject script, xóa hoàn toàn cảnh báo "Your Antigravity installation appears to be corrupt"
 - **Auto-Reload sau Update** — Tự reload sau khi cập nhật checksums, đảm bảo không hiện cảnh báo
 - **Auto-Dismiss Notification** — Tự đóng notification "corrupt" nếu vẫn xuất hiện (backup)
