@@ -17,7 +17,7 @@ Quét mã QR bên dưới qua **Momo, VietQR hoặc Napas 247**:
 
 ---
 
-# AG Auto Click & Scroll v6.7
+# AG Auto Click & Scroll v6.9
 
 **Extension tự động nhấn nút Run, Allow, Accept all và cuộn khung chat Antigravity.**  
 Thiết kế thông minh — chỉ click **nút approval** (có nút Reject bên cạnh), không click nhầm UI khác.
@@ -111,6 +111,10 @@ Mặc định **OFF**: `Accept all` (bật thủ công khi cần)
 
 ---
 
+## Click Stats
+
+![Click Stats](media/click-stats-screenshot.png)
+
 ## Giao diện Settings
 
 ![Settings UI](media/settings-screenshot.png)
@@ -119,7 +123,7 @@ Mặc định **OFF**: `Accept all` (bật thủ công khi cần)
 
 ## Changelog
 
-### v6.7.0 (Latest)
+### v6.9.0 (Latest)
 - **Fix 'Corrupt Installation' Warning** — Tự động cập nhật checksums trong `product.json` sau khi inject script, xóa hoàn toàn cảnh báo "Your Antigravity installation appears to be corrupt"
 - **Auto-Reload sau Update** — Tự reload sau khi cập nhật checksums, đảm bảo không hiện cảnh báo
 - **Auto-Dismiss Notification** — Tự đóng notification "corrupt" nếu vẫn xuất hiện (backup)

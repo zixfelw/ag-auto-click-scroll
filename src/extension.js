@@ -1250,7 +1250,7 @@ function isScriptInjected() {
 // EXTENSION ACTIVATION
 // =============================================================
 function activate(context) {
-    console.log('[AG Auto] Extension đang khởi động (v6.7.0)...');
+    console.log('[AG Auto] Extension đang khởi động (v6.9.0)...');
     _extensionContext = context;
 
     // Restore persisted click stats
