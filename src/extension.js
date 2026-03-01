@@ -267,20 +267,28 @@ function installScript(context) {
  */
 function updateProductChecksums() {
     try {
-        const wbPath = getWorkbenchPath();
-        if (!wbPath) return;
-        const wbDir = path.dirname(wbPath);
-
-        // Tìm product.json (thường ở thư mục gốc của app)
+        // Tìm product.json qua nhiều cách
         let productJsonPath = null;
-        let searchDir = wbDir;
-        for (let i = 0; i < 5; i++) {
-            const candidate = path.join(searchDir, 'product.json');
-            if (fs.existsSync(candidate)) {
-                productJsonPath = candidate;
-                break;
+
+        // Cách 1: process.resourcesPath (nhanh nhất)
+        if (process.resourcesPath) {
+            const candidate = path.join(process.resourcesPath, 'app', 'product.json');
+            if (fs.existsSync(candidate)) productJsonPath = candidate;
+        }
+
+        // Cách 2: Từ workbench path đi lên
+        if (!productJsonPath) {
+            const wbPath = getWorkbenchPath();
+            if (!wbPath) return;
+            let searchDir = path.dirname(wbPath);
+            for (let i = 0; i < 8; i++) {
+                const candidate = path.join(searchDir, 'product.json');
+                if (fs.existsSync(candidate)) {
+                    productJsonPath = candidate;
+                    break;
+                }
+                searchDir = path.dirname(searchDir);
             }
-            searchDir = path.dirname(searchDir);
         }
 
         if (!productJsonPath) {
@@ -295,13 +303,19 @@ function updateProductChecksums() {
             console.log('[AG Auto] product.json không có trường checksums, bỏ qua');
             return;
         }
-
+        // product.json ở resources/app/ nhưng files ở resources/app/out/
         const appRoot = path.dirname(productJsonPath);
+        const outDir = path.join(appRoot, 'out');
         let updated = false;
 
         // Recalculate checksums cho tất cả files trong product.json
         for (const relativePath in productJson.checksums) {
-            const filePath = path.join(appRoot, relativePath);
+            // relativePath dùng forward slashes (e.g. "vs/workbench/workbench.desktop.main.js")
+            // Trên Windows cần convert thành native path separator
+            const nativePath = relativePath.split('/').join(path.sep);
+            // Thử tìm file ở out/ trước, nếu ko có thì thử appRoot trực tiếp
+            let filePath = path.join(outDir, nativePath);
+            if (!fs.existsSync(filePath)) filePath = path.join(appRoot, nativePath);
             if (fs.existsSync(filePath)) {
                 const content = fs.readFileSync(filePath);
                 const hash = crypto.createHash('sha256').update(content).digest('base64').replace(/=+$/, '');
@@ -309,7 +323,7 @@ function updateProductChecksums() {
                 if (oldHash !== hash) {
                     productJson.checksums[relativePath] = hash;
                     updated = true;
-                    console.log('[AG Auto] Checksum updated:', relativePath);
+                    console.log('[AG Auto] Checksum updated:', relativePath, '(old:', oldHash.substring(0, 10) + '...', 'new:', hash.substring(0, 10) + '...)');
                 }
             }
         }
@@ -320,8 +334,10 @@ function updateProductChecksums() {
         } else {
             console.log('[AG Auto] Checksums đã đúng, không cần update');
         }
+        return updated;
     } catch (e) {
         console.error('[AG Auto] Lỗi update checksums:', e.message);
+        return false;
     }
 }
 
@@ -1234,7 +1250,7 @@ function isScriptInjected() {
 // EXTENSION ACTIVATION
 // =============================================================
 function activate(context) {
-    console.log('[AG Auto] Extension đang khởi động (v6.4.1)...');
+    console.log('[AG Auto] Extension đang khởi động (v6.5.0)...');
     _extensionContext = context;
 
     // Restore persisted click stats
@@ -1313,12 +1329,19 @@ if ($global:clicked) { Write-Output 'CLICKED' }
         // This handles Antigravity updates that overwrite workbench files
         const needsInject = !isScriptInjected();
 
-        if (needsInject) {
-            console.log('[AG Auto] Script not found in workbench — injecting...');
+        // Detect extension upgrade → force re-inject to update autoScript
+        const currentVersion = context.extension?.packageJSON?.version || '0';
+        const lastVersion = context.globalState.get('ag-injected-version', '0');
+        const versionChanged = currentVersion !== lastVersion;
+        const shouldInject = needsInject || versionChanged;
+
+        if (shouldInject) {
+            const reason = needsInject ? 'Script not found' : `Version changed (${lastVersion} → ${currentVersion})`;
+            console.log(`[AG Auto] ${reason} — injecting...`);
             try {
                 installScript(context);
-                updateProductChecksums();
-                console.log('[AG Auto] ✅ Injected + checksums updated! Auto-reload in 1s...');
+                context.globalState.update('ag-injected-version', currentVersion);
+                console.log('[AG Auto] ✅ Injected! Auto-reload in 1s...');
                 vscode.window.showInformationMessage('[AG Auto] ✅ Script injected! Reloading...');
                 setTimeout(() => {
                     vscode.commands.executeCommand('workbench.action.reloadWindow');
@@ -1327,6 +1350,29 @@ if ($global:clicked) { Write-Output 'CLICKED' }
             } catch (e) {
                 console.error('[AG Auto] Inject error:', e.message);
             }
+        }
+
+        // Always update checksums to suppress "corrupt installation" warning
+        const checksumsUpdated = updateProductChecksums();
+        if (checksumsUpdated && !shouldInject) {
+            // Checksums vừa update → reload để integrity check pass ở lần boot tiếp
+            // Dùng flag để tránh reload loop
+            const reloadKey = 'ag-checksum-reload-done';
+            const alreadyReloaded = context.globalState.get(reloadKey, false);
+            if (!alreadyReloaded) {
+                context.globalState.update(reloadKey, true);
+                console.log('[AG Auto] Checksums updated, reloading to apply...');
+                vscode.window.showInformationMessage('[AG Auto] Đã cập nhật checksums. Reloading...');
+                setTimeout(() => {
+                    vscode.commands.executeCommand('workbench.action.reloadWindow');
+                }, 1500);
+            } else {
+                // Reset flag cho lần update tiếp theo
+                context.globalState.update(reloadKey, false);
+            }
+        } else if (!checksumsUpdated) {
+            // Checksums đã đúng → reset flag
+            context.globalState.update('ag-checksum-reload-done', false);
         }
 
         // SECOND RUN (after reload): workbench.js has our injected code running

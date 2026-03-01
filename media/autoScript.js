@@ -10,6 +10,40 @@
     }
     window._agToolIntervals = [];
 
+    // --- Auto-dismiss "corrupt installation" notification ---
+    (function suppressCorruptBanner() {
+        function dismissCorrupt() {
+            var banners = document.querySelectorAll('.notifications-toasts .notification-toast, .notification-list-item');
+            banners.forEach(function (b) {
+                var text = b.textContent || '';
+                if (text.indexOf('corrupt') !== -1 || text.indexOf('reinstall') !== -1) {
+                    var closeBtn = b.querySelector('.codicon-notifications-clear, .codicon-close, .action-label[aria-label*="Close"], .action-label[aria-label*="clear"], .clear-notification-action');
+                    if (closeBtn) {
+                        closeBtn.click();
+                        console.log('[AG Auto] 🧹 Dismissed corrupt notification');
+                    } else {
+                        b.style.display = 'none';
+                        console.log('[AG Auto] 🧹 Hidden corrupt notification');
+                    }
+                }
+            });
+        }
+        // Check immediately and periodically for the first 30s
+        dismissCorrupt();
+        var attempts = 0;
+        var timer = setInterval(function () {
+            dismissCorrupt();
+            if (++attempts > 30) clearInterval(timer);
+        }, 1000);
+        // Also watch DOM mutations
+        try {
+            var observer = new MutationObserver(function () { dismissCorrupt(); });
+            var target = document.body || document.documentElement;
+            observer.observe(target, { childList: true, subtree: true });
+            setTimeout(function () { observer.disconnect(); }, 30000);
+        } catch (e) { }
+    })();
+
     var PAUSE_SCROLL_MS = /*{{PAUSE_SCROLL_MS}}*/7000;
     var CLICK_INTERVAL_MS = /*{{CLICK_INTERVAL_MS}}*/1000;
     var SCROLL_INTERVAL_MS = /*{{SCROLL_INTERVAL_MS}}*/500;
