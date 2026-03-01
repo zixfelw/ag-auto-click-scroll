@@ -5,6 +5,7 @@ const vscode = require('vscode');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const crypto = require('crypto');
 const { execSync } = require('child_process');
 
 // Tag markers để tìm và xoá script đã inject
@@ -258,6 +259,70 @@ function installScript(context) {
     }
 
     return true;
+}
+
+/**
+ * Cập nhật checksums trong product.json sau khi inject/uninstall
+ * để tránh lỗi "Your Antigravity installation appears to be corrupt"
+ */
+function updateProductChecksums() {
+    try {
+        const wbPath = getWorkbenchPath();
+        if (!wbPath) return;
+        const wbDir = path.dirname(wbPath);
+
+        // Tìm product.json (thường ở thư mục gốc của app)
+        let productJsonPath = null;
+        let searchDir = wbDir;
+        for (let i = 0; i < 5; i++) {
+            const candidate = path.join(searchDir, 'product.json');
+            if (fs.existsSync(candidate)) {
+                productJsonPath = candidate;
+                break;
+            }
+            searchDir = path.dirname(searchDir);
+        }
+
+        if (!productJsonPath) {
+            console.log('[AG Auto] product.json không tìm thấy, bỏ qua checksum update');
+            return;
+        }
+
+        console.log('[AG Auto] Tìm thấy product.json:', productJsonPath);
+        const productJson = JSON.parse(fs.readFileSync(productJsonPath, 'utf8'));
+
+        if (!productJson.checksums) {
+            console.log('[AG Auto] product.json không có trường checksums, bỏ qua');
+            return;
+        }
+
+        const appRoot = path.dirname(productJsonPath);
+        let updated = false;
+
+        // Recalculate checksums cho tất cả files trong product.json
+        for (const relativePath in productJson.checksums) {
+            const filePath = path.join(appRoot, relativePath);
+            if (fs.existsSync(filePath)) {
+                const content = fs.readFileSync(filePath);
+                const hash = crypto.createHash('sha256').update(content).digest('base64').replace(/=+$/, '');
+                const oldHash = productJson.checksums[relativePath];
+                if (oldHash !== hash) {
+                    productJson.checksums[relativePath] = hash;
+                    updated = true;
+                    console.log('[AG Auto] Checksum updated:', relativePath);
+                }
+            }
+        }
+
+        if (updated) {
+            writeFileElevated(productJsonPath, JSON.stringify(productJson, null, '\t'));
+            console.log('[AG Auto] ✅ product.json checksums đã cập nhật!');
+        } else {
+            console.log('[AG Auto] Checksums đã đúng, không cần update');
+        }
+    } catch (e) {
+        console.error('[AG Auto] Lỗi update checksums:', e.message);
+    }
 }
 
 /**
@@ -1169,7 +1234,7 @@ function isScriptInjected() {
 // EXTENSION ACTIVATION
 // =============================================================
 function activate(context) {
-    console.log('[AG Auto] Extension đang khởi động (v6.3.0)...');
+    console.log('[AG Auto] Extension đang khởi động (v6.4.1)...');
     _extensionContext = context;
 
     // Restore persisted click stats
@@ -1252,7 +1317,8 @@ if ($global:clicked) { Write-Output 'CLICKED' }
             console.log('[AG Auto] Script not found in workbench — injecting...');
             try {
                 installScript(context);
-                console.log('[AG Auto] ✅ Injected! Auto-reload in 1s...');
+                updateProductChecksums();
+                console.log('[AG Auto] ✅ Injected + checksums updated! Auto-reload in 1s...');
                 vscode.window.showInformationMessage('[AG Auto] ✅ Script injected! Reloading...');
                 setTimeout(() => {
                     vscode.commands.executeCommand('workbench.action.reloadWindow');
