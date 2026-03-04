@@ -17,16 +17,26 @@ Quét mã QR bên dưới qua **Momo, VietQR hoặc Napas 247**:
 
 ---
 
-# AG Auto Click & Scroll v6.9
+# AG Auto Click & Scroll v8.1
 
-**Extension tự động nhấn nút Run, Allow, Accept all và cuộn khung chat Antigravity.**  
-Thiết kế thông minh — chỉ click **nút approval** (có nút Reject bên cạnh), không click nhầm UI khác.
+**Extension tự động nhấn nút Run, Allow, Accept, Accept all và cuộn khung chat Antigravity.**  
+Thiết kế thông minh — Accept chỉ click ở **khung chat**, tuyệt đối không click ở editor.
 
 > Hỗ trợ **Windows & Linux** — tự động xử lý quyền ghi file trên mọi hệ điều hành.
 
 ---
 
-## Có gì mới trong v6.6
+## Có gì mới trong v8.1
+
+### Log Click Stats
+- Ghi log chi tiết mỗi lần auto-click vào bảng thống kê
+- Hiển thị lịch sử click realtime trong Settings panel
+
+### Hỗ trợ nút Accept
+- Tự động click **Accept** ở khung chat — tuyệt đối không click ở diff editor
+- Phân biệt Accept (chat) vs Accept Changes/Accept All (editor) bằng DOM context
+- Commands API chỉ chạy `acceptAgentStep` (chat), không chạy `agentAcceptAllInFile` (editor)
+- Accept mặc định **ON**, hoạt động ngay khi cài — không cần Save & Apply
 
 ### Fix thông báo "Corrupt Installation"
 - Tự động cập nhật checksums sau khi inject → xóa hoàn toàn cảnh báo "corrupt"
@@ -36,23 +46,14 @@ Thiết kế thông minh — chỉ click **nút approval** (có nút Reject bên
 ### Click Stats Dashboard
 - Bảng thống kê click realtime ngay trong Settings với progress bar so sánh
 - Nút click nhiều nhất tự động nhận vương miện
-- Badge tổng số click ngay cạnh tiêu đề
-- Nút Reset xóa toàn bộ thống kê, đồng bộ cả autoScript và extension host
-- Stats tự cập nhật mỗi 2 giây, bar có animation mượt
 - Lưu thống kê qua restart, chỉ mất khi ấn Reset
 
 ### Native Dialog Auto-Click (Win32)
 - Tự động nhấn **Keep Waiting** trong dialog "window not responding" bằng Win32 API
-- Quét mọi cửa sổ Windows để tìm nút Keep Waiting, không phụ thuộc title dialog
-- Đếm số lần click vào stats, merge với stats từ autoScript
 
-### Toggle Settings Panel
-- Click status bar lần 1 → mở Settings, lần 2 → đóng Settings
-- Cả 2 nút "Accept ON" và "Scroll ON" đều hỗ trợ toggle
-
-### Display Name Mapping
-- Hiển thị tên đầy đủ (VD: "Allow This Conversion") mà không ảnh hưởng logic click
-- Tên nội bộ giữ nguyên để đảm bảo pattern matching chính xác
+### Giao diện đơn giản hơn
+- Bỏ ô nhập nút tùy chỉnh — chỉ giữ các nút mặc định, toggle ON/OFF
+- Clean injection — chỉ dùng HTML script tag, ổn định hơn
 
 ---
 
@@ -60,14 +61,14 @@ Thiết kế thông minh — chỉ click **nút approval** (có nút Reject bên
 
 | Tính năng | Mô tả |
 |-----------|-------|
-| **Auto Click** | Tự động nhấn Run, Allow, Always Allow, Accept all, Keep Waiting... |
+| **Auto Click** | Tự động nhấn Run, Allow, Always Allow, Accept, Accept all, Keep Waiting... |
 | **Auto Scroll** | Cuộn khung chat xuống cuối để không bỏ lỡ nội dung mới |
 | **Click Stats** | Bảng thống kê click realtime với progress bar và badge |
 | **Instant Toggle** | Gạt switch ON/OFF → áp dụng tức thì, không cần Save hay Reload |
 | **Tắt/Bật riêng** | Accept và Scroll có toggle riêng, hoạt động độc lập |
 | **HTTP Live Sync** | Settings cập nhật realtime qua HTTP server nội bộ |
-| **Safe Click** | Chỉ click nút approval (có Reject bên cạnh), không phá UI |
-| **Diff Protection** | KHÔNG click Accept Changes/Accept All trong diff/merge editor |
+| **Smart Accept** | Accept chỉ click ở **khung chat** — không click ở diff editor |
+| **Diff Protection** | KHÔNG click Accept Changes/Accept All/Accept Incoming trong editor |
 | **Settings UI** | Giao diện đẹp — bật/tắt từng nút, chỉnh tốc độ, đa ngôn ngữ |
 | **Dual Status Bar** | Hiện Accept ON/OFF và Scroll ON/OFF riêng biệt, màu xanh/đỏ |
 
@@ -75,11 +76,11 @@ Thiết kế thông minh — chỉ click **nút approval** (có nút Reject bên
 
 ## Danh sách nút hỗ trợ
 
-Mặc định **ON**: `Run` · `Allow` · `Always Allow` · `Keep Waiting` · `Retry` · `Continue` · `Allow Once` · `Allow This Con`
+Mặc định **ON**: `Run` · `Allow` · `Accept` · `Always Allow` · `Keep Waiting` · `Retry` · `Continue` · `Allow Once` · `Allow This Con`
 
 Mặc định **OFF**: `Accept all` (bật thủ công khi cần)
 
-> Bạn có thể thêm nút tùy chỉnh hoặc bật/tắt từng nút trong Settings.
+> `Accept` chỉ click ở khung chat, không click ở editor. Bạn có thể thêm nút tùy chỉnh hoặc bật/tắt từng nút trong Settings.
 
 ---
 
@@ -123,10 +124,19 @@ Mặc định **OFF**: `Accept all` (bật thủ công khi cần)
 
 ## Changelog
 
-### v6.9.0 (Latest)
-- **Fix 'Corrupt Installation' Warning** — Tự động cập nhật checksums trong `product.json` sau khi inject script, xóa hoàn toàn cảnh báo "Your Antigravity installation appears to be corrupt"
-- **Auto-Reload sau Update** — Tự reload sau khi cập nhật checksums, đảm bảo không hiện cảnh báo
-- **Auto-Dismiss Notification** — Tự đóng notification "corrupt" nếu vẫn xuất hiện (backup)
+### v8.1.0 (Latest)
+- **Log Click Stats** — Ghi log chi tiết mỗi lần auto-click, hiển thị lịch sử click realtime trong Settings
+
+### v7.4.0
+- **Hỗ trợ nút Accept** — Tự động click Accept ở khung chat, tuyệt đối không click ở diff editor
+- **Smart Accept Logic** — Phân biệt Accept (chat) vs Accept Changes/Accept All (editor) bằng DOM context
+- **Chat-only Commands** — Commands API chỉ chạy `acceptAgentStep` (chat), không chạy `agentAcceptAllInFile` (editor)
+- **Clean Injection** — Bỏ inject code vào workbench.js, chỉ dùng HTML script tag — ổn định hơn, không bị V8 cache
+
+### v7.0.0
+- **Fix 'Corrupt Installation' Warning** — Tự động cập nhật checksums trong `product.json`
+- **Auto-Reload sau Update** — Tự reload sau khi cập nhật checksums
+- **Auto-Dismiss Notification** — Tự đóng notification "corrupt" nếu vẫn xuất hiện
 
 ### v6.3.0
 - **Click Stats Dashboard** — Thống kê click realtime, progress bar, vương miện, badge

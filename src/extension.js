@@ -106,9 +106,10 @@ function buildScriptContent(context) {
     const pauseMs = config.get('scrollPauseMs', 7000);
     const scrollMs = config.get('scrollIntervalMs', 500);
     const clickMs = config.get('clickIntervalMs', 1000);
-    const allPatterns = config.get('clickPatterns', ['Allow', 'Always Allow', 'Run', 'Keep Waiting', 'Accept all']);
+    const allPatterns = config.get('clickPatterns', ['Allow', 'Always Allow', 'Run', 'Keep Waiting', 'Accept all', 'Accept']);
     const disabledPats = context.globalState.get('disabledClickPatterns', []);
-    const patterns = allPatterns.filter(p => !disabledPats.includes(p));
+    // NEVER include 'Accept' in regular patterns — it's handled separately (chat-only)
+    const patterns = allPatterns.filter(p => !disabledPats.includes(p) && p !== 'Accept');
     const enabled = config.get('enabled', true);
 
     // Đọc template script
@@ -142,13 +143,16 @@ function writeConfigJson(context) {
         if (!wbPath) return;
         const wbDir = path.dirname(wbPath);
         const config = vscode.workspace.getConfiguration('ag-auto');
-        const allPatterns = config.get('clickPatterns', ['Allow', 'Always Allow', 'Run', 'Keep Waiting']);
+        const allPatterns = config.get('clickPatterns', ['Allow', 'Always Allow', 'Run', 'Keep Waiting', 'Accept']);
         const disabledPats = context.globalState.get('disabledClickPatterns', []);
-        const activePatterns = allPatterns.filter(p => !disabledPats.includes(p));
+        // NEVER include 'Accept' in config JSON patterns — handled separately
+        const activePatterns = allPatterns.filter(p => !disabledPats.includes(p) && p !== 'Accept');
+        const acceptEnabled = allPatterns.includes('Accept') && !disabledPats.includes('Accept');
         const enabled = config.get('enabled', true);
         const configData = JSON.stringify({
             enabled: enabled,
             clickPatterns: activePatterns,
+            acceptInChatOnly: acceptEnabled,
             pauseScrollMs: config.get('scrollPauseMs', 7000),
             scrollIntervalMs: config.get('scrollIntervalMs', 500),
             clickIntervalMs: config.get('clickIntervalMs', 1000)
@@ -178,12 +182,12 @@ function installScript(context) {
     const wbDir = path.dirname(wbPath);
     const scriptContent = buildScriptContent(context);
 
-    // ===== Cách 1: Tìm và ghi vào file JS THẬT SỰ được load (bypass CSP hoàn toàn) =====
+    // ===== Step 1: CLEANUP old JS injection from workbench.js (don't add anything new) =====
     const JS_TAG_START = '/* AG-AUTO-CLICK-SCROLL-JS-START */';
     const JS_TAG_END = '/* AG-AUTO-CLICK-SCROLL-JS-END */';
 
     try {
-        // Đọc HTML để tìm các file JS thực sự được load
+        // Find JS files and remove old injected code
         const htmlContent = fs.readFileSync(wbPath, 'utf8');
         const scriptMatches = htmlContent.match(/src="([^"]*\.js)"/g) || [];
         const jsFiles = new Set();
@@ -192,12 +196,9 @@ function installScript(context) {
             const srcMatch = match.match(/src="([^"]*\.js)"/);
             if (srcMatch) {
                 const jsName = path.basename(srcMatch[1].split('?')[0]);
-                // Tìm file trong cùng thư mục và thư mục cha
+                if (jsName === 'ag-auto-script.js') continue; // Skip our own script
                 const sameDirPath = path.join(wbDir, jsName);
-                if (fs.existsSync(sameDirPath)) {
-                    jsFiles.add(sameDirPath);
-                }
-                // Tìm trong thư mục cha (2 cấp)
+                if (fs.existsSync(sameDirPath)) jsFiles.add(sameDirPath);
                 const parent1 = path.join(wbDir, '..', jsName);
                 if (fs.existsSync(parent1)) jsFiles.add(path.resolve(parent1));
                 const parent2 = path.join(wbDir, '..', '..', jsName);
@@ -205,55 +206,46 @@ function installScript(context) {
             }
         }
 
-        // Fallback: tìm workbench.desktop.main.js nếu chưa có
+        // Fallback: also check workbench.desktop.main.js
         if (jsFiles.size === 0) {
             const fallbackNames = ['workbench.desktop.main.js', 'workbench.js'];
             for (const name of fallbackNames) {
-                // Tìm rộng hơn
                 const found = findFileRecursive(path.join(wbDir, '..'), name, 3);
                 if (found) { jsFiles.add(found); break; }
             }
         }
 
-        console.log('[AG Auto] Tìm thấy', jsFiles.size, 'file JS để inject');
-
         for (const jsPath of jsFiles) {
             let jsContent = fs.readFileSync(jsPath, 'utf8');
-
-            // Xóa inject cũ
             const jsRegex = new RegExp(`${escapeRegex(JS_TAG_START)}[\\s\\S]*?${escapeRegex(JS_TAG_END)}`, 'g');
-            jsContent = jsContent.replace(jsRegex, '');
-
-            // Thêm code vào cuối
-            const jsInjection = `\n${JS_TAG_START}\n;(function(){try{${scriptContent}}catch(e){console.error('[AG Auto] Lỗi:',e);}})();\n${JS_TAG_END}`;
-            jsContent += jsInjection;
-
-            writeFileElevated(jsPath, jsContent);
-            console.log('[AG Auto] ✅ Inject vào', path.basename(jsPath), '(bypass CSP)!');
+            if (jsRegex.test(jsContent)) {
+                jsContent = jsContent.replace(jsRegex, '');
+                writeFileElevated(jsPath, jsContent);
+                console.log('[AG Auto] 🧹 Cleaned old inject from', path.basename(jsPath));
+            }
         }
     } catch (err) {
-        console.error('[AG Auto] Lỗi inject vào JS:', err.message);
+        console.error('[AG Auto] Lỗi cleanup JS:', err.message);
     }
 
-    // ===== Cách 2: Modify workbench.html — cache bust workbench.js + fallback script =====
+    // ===== Step 2: Write ag-auto-script.js + inject HTML <script> tag =====
     try {
         let html = fs.readFileSync(wbPath, 'utf8');
         const htmlRegex = new RegExp(`${escapeRegex(TAG_START)}[\\s\\S]*?${escapeRegex(TAG_END)}`, 'g');
         html = html.replace(htmlRegex, '');
 
-        // Cache bust workbench.js để ép Chromium load lại từ đĩa (bypass V8 code cache)
         const ts = Date.now();
-        html = html.replace(/src="workbench\.js(\?[^"]*)?"/g, `src="workbench.js?v=${ts}"`);
-        console.log('[AG Auto] Cache bust workbench.js?v=' + ts);
 
-        // Fallback: thêm ag-auto-script.js cho các bản cũ
+        // Write fresh script file
         const destPath = path.join(wbDir, 'ag-auto-script.js');
         writeFileElevated(destPath, scriptContent);
+
+        // Add <script> tag to HTML
         const injection = `\n${TAG_START}\n<script src="ag-auto-script.js?v=${ts}"></script>\n${TAG_END}`;
         html = html.replace('</html>', injection + '\n</html>');
 
         writeFileElevated(wbPath, html);
-        console.log('[AG Auto] ✅ Inject + cache bust vào workbench.html!');
+        console.log('[AG Auto] ✅ HTML inject + fresh ag-auto-script.js (v=' + ts + ')');
     } catch (err) {
         console.error('[AG Auto] Lỗi inject vào HTML:', err.message);
     }
@@ -342,6 +334,25 @@ function updateProductChecksums() {
 }
 
 /**
+ * Clear V8 bytecode code cache to force Electron to recompile JS from disk
+ * Without this, Electron reuses cached bytecode and ignores file changes
+ */
+function clearV8CodeCache() {
+    try {
+        const appDataDir = process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming');
+        const codeCacheDir = path.join(appDataDir, 'Antigravity', 'Code Cache', 'js');
+        if (fs.existsSync(codeCacheDir)) {
+            fs.rmSync(codeCacheDir, { recursive: true, force: true });
+            console.log('[AG Auto] Cleared V8 code cache:', codeCacheDir);
+        } else {
+            console.log('[AG Auto] V8 code cache dir not found:', codeCacheDir);
+        }
+    } catch (e) {
+        console.log('[AG Auto] Could not clear code cache:', e.message);
+    }
+}
+
+/**
  * Gỡ script khỏi workbench.html
  */
 function uninstallScript() {
@@ -420,7 +431,7 @@ function openSettingsPanel(context) {
         scrollPauseMs: config.get('scrollPauseMs', 7000),
         scrollIntervalMs: config.get('scrollIntervalMs', 500),
         clickIntervalMs: config.get('clickIntervalMs', 1000),
-        clickPatterns: config.get('clickPatterns', ['Allow', 'Always Allow', 'Run', 'Keep Waiting']),
+        clickPatterns: config.get('clickPatterns', ['Allow', 'Always Allow', 'Run', 'Keep Waiting', 'Accept']),
         disabledClickPatterns: context.globalState.get('disabledClickPatterns', []),
         language: config.get('language', 'vi'),
         clickStats: _clickStats,
@@ -438,7 +449,7 @@ function openSettingsPanel(context) {
                 scrollPauseMs: cfg.get('scrollPauseMs', 7000),
                 scrollIntervalMs: cfg.get('scrollIntervalMs', 500),
                 clickIntervalMs: cfg.get('clickIntervalMs', 1000),
-                clickPatterns: cfg.get('clickPatterns', ['Run', 'Allow', 'Always Allow']),
+                clickPatterns: cfg.get('clickPatterns', ['Run', 'Allow', 'Always Allow', 'Accept']),
                 disabledClickPatterns: context.globalState.get('disabledClickPatterns', []),
                 language: msg.lang,
                 clickStats: _clickStats,
@@ -508,6 +519,14 @@ function openSettingsPanel(context) {
             context.globalState.update('clickStats', {});
             context.globalState.update('totalClicks', 0);
             panel.webview.postMessage({ command: 'statsUpdated', clickStats: {}, totalClicks: 0 });
+        }
+        if (msg.command === 'clearClickLog') {
+            _clickLog = [];
+            if (_extensionContext) _extensionContext.globalState.update('clickLog', []);
+            panel.webview.postMessage({ command: 'clickLogUpdate', log: [] });
+        }
+        if (msg.command === 'getClickLog') {
+            panel.webview.postMessage({ command: 'clickLogUpdate', log: _clickLog });
         }
         if (msg.command === 'getStats') {
             panel.webview.postMessage({ command: 'statsUpdated', clickStats: _clickStats, totalClicks: _totalClicks });
@@ -633,7 +652,16 @@ function getSettingsHtml(cfg) {
     .click-badge .count { color: #f9e2af; font-size: 1.1em; }
     .btn-reset-stats { background: none; border: 1px solid #585b70; border-radius: 12px; color: #f38ba8; font-size: 0.7em; padding: 2px 10px; cursor: pointer; transition: all 0.2s; }
     .btn-reset-stats:hover { background: #f38ba8; color: #1e1e2e; }
-    .stats-card { background: #313244; border-radius: 12px; padding: 16px; margin-bottom: 16px; border: 1px solid #45475a; }
+    .top-row { display: flex; gap: 16px; margin-bottom: 16px; }
+    .top-row > * { flex: 1; min-width: 0; }
+    .stats-card { background: #313244; border-radius: 12px; padding: 16px; border: 1px solid #45475a; }
+    .clicklog-card { background: #313244; border-radius: 12px; padding: 16px; border: 1px solid #45475a; }
+    .clicklog-title { font-size: 0.9em; color: #f9e2af; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+    .clicklog-entry { padding: 6px 10px; border-bottom: 1px solid #1e1e2e; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+    .clicklog-entry:last-child { border-bottom: none; }
+    .clicklog-pattern { font-weight: 600; font-size: 0.85em; }
+    .clicklog-time { color: #bac2de; font-size: 0.75em; white-space: nowrap; }
+    .clicklog-btn { font-size: 0.75em; color: #6c7086; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .stats-card-title { font-size: 0.9em; color: #89b4fa; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
     .stats-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
     .stats-label { min-width: 100px; font-size: 0.8em; color: #cdd6f4; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -808,9 +836,17 @@ function getSettingsHtml(cfg) {
             🎯 <span class="count" id="totalCount">${cfg.totalClicks || 0}</span> clicks
         </span>
     </div>
-    <div class="stats-card" id="statsCard">
-        <div class="stats-card-title">📊 Click Stats <button class="btn-reset-stats" onclick="resetStats()" title="Reset counter">↺ Reset</button></div>
-        <div id="statsBars"></div>
+    <div class="top-row">
+        <div class="stats-card" id="statsCard">
+            <div class="stats-card-title">📊 Click Stats <button class="btn-reset-stats" onclick="resetStats()" title="Reset counter">↺ Reset</button></div>
+            <div id="statsBars"></div>
+        </div>
+        <div class="clicklog-card">
+            <div class="clicklog-title">🎯 Click Log <button class="btn-reset-stats" onclick="clearClickLog()">↺ Clear</button></div>
+            <div id="clickLogList" style="max-height:300px;overflow-y:auto">
+                <div style="color:#6c7086;padding:8px;font-size:0.85em">No clicks yet</div>
+            </div>
+        </div>
     </div>
     <p class="subtitle">${strings.title}</p>
 
@@ -876,10 +912,7 @@ function getSettingsHtml(cfg) {
         <div style="margin-top: 16px;">
             <label>BUTTON TEMPLATES</label>
             <div class="pattern-list" id="templateList"></div>
-            <div class="add-pattern">
-                <input type="text" id="txtNewPattern" placeholder="${strings.inputPlaceholder}" onkeydown="if(event.key==='Enter')addPattern()">
-                <button class="btn btn-add" onclick="addPattern()">${strings.btnAdd}</button>
-            </div>
+
         </div>
     </div>
 
@@ -890,7 +923,7 @@ function getSettingsHtml(cfg) {
 
 <script>
     const vscode = acquireVsCodeApi();
-    const DEFAULT_PATTERNS = ['Run', 'Allow', 'Always Allow', 'Keep Waiting', 'Retry', 'Continue', 'Allow Once', 'Allow This Con', 'Accept all'];
+    const DEFAULT_PATTERNS = ['Run', 'Allow', 'Accept', 'Always Allow', 'Keep Waiting', 'Retry', 'Continue', 'Allow Once', 'Allow This Con', 'Accept all'];
     const DEFAULT_DISABLED = ['Accept all']; // These start OFF by default
     let patterns = ${patternsJson};
     let disabledPatterns = ${disabledPatternsJson};
@@ -928,7 +961,7 @@ function getSettingsHtml(cfg) {
             h += '<input type="checkbox" ' + (isOn ? 'checked' : '') + ' onchange="togPat(&quot;' + p + '&quot;)" style="width:16px;height:16px;cursor:pointer;accent-color:#a6e3a1">';
             h += '<span style="font-weight:600;color:#cdd6f4">' + displayName(p) + '</span></div>';
             h += '<div style="display:flex;align-items:center;gap:8px">';
-            if (!isDef) h += '<span onclick="delPat(&quot;' + p + '&quot;)" style="cursor:pointer;color:#f38ba8;margin-right:8px;font-size:0.85em">&#10006;</span>';
+
             h += '<span style="font-size:0.75em;padding:2px 8px;border-radius:4px;background:' + (isOn ? '#1a3a1a' : '#3a1a1a') + ';color:' + stColor + ';font-weight:600">' + stIcon + '</span>';
             h += '</div></div>';
         });
@@ -939,19 +972,7 @@ function getSettingsHtml(cfg) {
         else { disabledPatterns=disabledPatterns.filter(function(x){return x!==v}); if(patterns.indexOf(v)===-1) patterns.push(v); }
         renderPatterns();
     }
-    function delPat(v) {
-        if (DEFAULT_PATTERNS.indexOf(v)!==-1) return;
-        patterns=patterns.filter(function(x){return x!==v});
-        disabledPatterns=disabledPatterns.filter(function(x){return x!==v});
-        renderPatterns();
-    }
-    function addPattern() {
-        var input = document.getElementById('txtNewPattern');
-        var val = input.value.trim();
-        if (val && patterns.indexOf(val)===-1 && disabledPatterns.indexOf(val)===-1) {
-            patterns.push(val); renderPatterns(); input.value = '';
-        }
-    }
+
 
     function saveSettings() {
         console.log('[AG Auto Webview] saveSettings() được gọi!');
@@ -1000,6 +1021,29 @@ function getSettingsHtml(cfg) {
     if(_zoomLevel!==100) applyZoom();
 
     // Click Stats
+    function clearClickLog() {
+        vscode.postMessage({ command: 'clearClickLog' });
+        document.getElementById('clickLogList').innerHTML = '<div style="color:#6c7086;padding:8px;font-size:0.85em">No clicks yet</div>';
+    }
+    function renderClickLog(log) {
+        var el = document.getElementById('clickLogList');
+        if (!el) return;
+        if (!log || log.length === 0) {
+            el.innerHTML = '<div style="color:#6c7086;padding:8px;font-size:0.85em">No clicks yet</div>';
+            return;
+        }
+        var html = '';
+        var colors = { Run: '#a6e3a1', Allow: '#89b4fa', Accept: '#fab387', 'Always Allow': '#89dceb', Retry: '#cba6f7', 'Keep Waiting': '#94e2d5', 'Allow Once': '#f9e2af', Continue: '#74c7ec', 'Accept all': '#fab387', 'Allow This Conversation': '#89b4fa' };
+        for (var i = 0; i < log.length; i++) {
+            var c = log[i];
+            var col = colors[c.pattern] || '#cdd6f4';
+            html += '<div class="clicklog-entry">';
+            html += '<span><span class="clicklog-pattern" style="color:' + col + '">' + c.pattern + '</span></span>';
+            html += '<span class="clicklog-time">' + c.time + '</span>';
+            html += '</div>';
+        }
+        el.innerHTML = html;
+    }
     function resetStats() {
         vscode.postMessage({ command: 'resetStats' });
         document.getElementById('totalCount').textContent = '0';
@@ -1043,10 +1087,14 @@ function getSettingsHtml(cfg) {
             document.getElementById('totalCount').textContent = msg.totalClicks || 0;
             renderStatsBars(msg.clickStats || {}, allPatterns);
         }
+        if (msg.command === 'clickLogUpdate') {
+            renderClickLog(msg.log);
+        }
     });
 
-    // Request initial stats
+    // Request initial stats + click log
     vscode.postMessage({ command: 'getStats' });
+    vscode.postMessage({ command: 'getClickLog' });
     // Also render with initial data
     renderStatsBars(${JSON.stringify(cfg.clickStats || {})}, allPatterns);
 </script>
@@ -1105,6 +1153,7 @@ let _httpScrollEnabled = true;
 let _httpClickPatterns = [];
 let _httpScrollConfig = { pauseScrollMs: 5000, scrollIntervalMs: 500, clickIntervalMs: 2000 };
 let _clickStats = {};
+let _clickLog = []; // In-memory click log (last 50)
 let _totalClicks = 0;
 let _resetStatsRequested = false;
 let _extensionContext = null;
@@ -1115,7 +1164,15 @@ function startHttpServer() {
     if (_httpServer) return;
     // Initialize from config
     const cfg = vscode.workspace.getConfiguration('ag-auto');
-    _httpClickPatterns = cfg.get('clickPatterns', ['Allow', 'Always Allow', 'Run', 'Keep Waiting']);
+    _httpClickPatterns = cfg.get('clickPatterns', ['Allow', 'Always Allow', 'Run', 'Keep Waiting', 'Accept']);
+    // Merge DEFAULT_PATTERNS for upgrades from older versions (config saved without Accept)
+    const _DEFAULT_PATS = ['Run', 'Allow', 'Accept', 'Always Allow', 'Keep Waiting', 'Retry', 'Continue', 'Allow Once', 'Allow This Con', 'Accept all'];
+    const _DEFAULT_OFF = ['Accept all'];
+    _DEFAULT_PATS.forEach(p => {
+        if (!_httpClickPatterns.includes(p)) {
+            if (!_DEFAULT_OFF.includes(p)) _httpClickPatterns.push(p);
+        }
+    });
     _httpScrollEnabled = cfg.get('scrollEnabled', true);
     _httpScrollConfig = {
         pauseScrollMs: cfg.get('scrollPauseMs', 5000),
@@ -1126,8 +1183,16 @@ function startHttpServer() {
         const url = require('url');
         _httpServer = http.createServer((req, res) => {
             res.setHeader('Access-Control-Allow-Origin', '*');
-            res.setHeader('Access-Control-Allow-Methods', 'GET, POST');
+            res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+            res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
             res.setHeader('Content-Type', 'application/json');
+
+            // Handle CORS preflight
+            if (req.method === 'OPTIONS') {
+                res.writeHead(204);
+                res.end();
+                return;
+            }
 
             const parsed = url.parse(req.url, true);
 
@@ -1161,11 +1226,44 @@ function startHttpServer() {
                 return;
             }
 
+            // Click LOG endpoint (debug)
+            if (parsed.pathname === '/api/click-log' && req.method === 'POST') {
+                let body = '';
+                req.on('data', chunk => { body += chunk; });
+                req.on('end', () => {
+                    try {
+                        const data = JSON.parse(body);
+                        console.log('[AG Auto] Click-log received:', data.pattern, data.button);
+                        const timestamp = (function () { var d = new Date(); var pad = function (n) { return n < 10 ? '0' + n : n }; return pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds()) + ' ' + pad(d.getDate()) + '/' + pad(d.getMonth() + 1); })();
+                        const entry = { time: timestamp, pattern: data.pattern || 'click', button: (data.button || '').substring(0, 80) };
+                        _clickLog.unshift(entry);
+                        if (_clickLog.length > 50) _clickLog.pop();
+                        // Persist to globalState
+                        if (_extensionContext) {
+                            _extensionContext.globalState.update('clickLog', _clickLog);
+                        }
+                        if (_settingsPanel) {
+                            _settingsPanel.webview.postMessage({ command: 'clickLogUpdate', log: _clickLog });
+                        }
+                        res.writeHead(200);
+                        res.end(JSON.stringify({ logged: true }));
+                    } catch (e) {
+                        res.writeHead(200);
+                        res.end(JSON.stringify({ error: e.message }));
+                    }
+                });
+                return;
+            }
+
             res.writeHead(200);
+            // Filter out 'Accept' from regular patterns — it needs special handling (chat-only)
+            const safePatterns = _httpClickPatterns.filter(p => p !== 'Accept');
+            const acceptEnabled = _httpClickPatterns.includes('Accept');
             const response = {
                 enabled: _autoAcceptEnabled,
                 scrollEnabled: _httpScrollEnabled,
-                clickPatterns: _httpClickPatterns,
+                clickPatterns: safePatterns,
+                acceptInChatOnly: acceptEnabled,
                 pauseScrollMs: _httpScrollConfig.pauseScrollMs,
                 scrollIntervalMs: _httpScrollConfig.scrollIntervalMs,
                 clickIntervalMs: _httpScrollConfig.clickIntervalMs,
@@ -1194,15 +1292,16 @@ function startHttpServer() {
 }
 
 // Keep Commands API as bonus (silent accept in background)
+// ONLY chat-safe commands — NEVER editor diff commands
 let _autoAcceptInterval = null;
-const ACCEPT_COMMANDS = [
-    'antigravity.agent.acceptAgentStep',
-    'antigravity.command.accept',
-    'antigravity.prioritized.agentAcceptAllInFile',
-    'antigravity.prioritized.agentAcceptFocusedHunk',
-    'antigravity.prioritized.supercompleteAccept',
-    'antigravity.terminalCommand.accept',
-    'antigravity.acceptCompletion'
+const CHAT_ACCEPT_COMMANDS = [
+    'antigravity.agent.acceptAgentStep',        // Chat panel: accept agent step ✅
+    'antigravity.prioritized.supercompleteAccept', // Autocomplete accept ✅
+    'antigravity.terminalCommand.accept',        // Terminal command accept ✅
+    'antigravity.acceptCompletion'               // Code completion accept ✅
+    // REMOVED: 'antigravity.command.accept'                    — too generic, may affect editor
+    // REMOVED: 'antigravity.prioritized.agentAcceptAllInFile'  — EDITOR accept!
+    // REMOVED: 'antigravity.prioritized.agentAcceptFocusedHunk' — EDITOR accept!
 ];
 
 function startCommandsLoop() {
@@ -1215,16 +1314,16 @@ function startCommandsLoop() {
     _autoAcceptInterval = setInterval(() => {
         if (!_autoAcceptEnabled) return;
 
-        // ONLY run Accept commands if user has an "Accept" pattern enabled
+        // Run chat-safe commands when ANY accept-related pattern is enabled
         const wantsAccept = _httpClickPatterns.some(p => p.toLowerCase().includes('accept'));
         if (!wantsAccept) return;
 
         Promise.allSettled(
-            ACCEPT_COMMANDS.map(cmd => vscode.commands.executeCommand(cmd))
+            CHAT_ACCEPT_COMMANDS.map(cmd => vscode.commands.executeCommand(cmd))
         ).catch(() => { });
     }, clickMs);
 
-    console.log('[AG Auto] Commands loop started (interval: ' + clickMs + 'ms, enabled: ' + _autoAcceptEnabled + ')');
+    console.log('[AG Auto] Commands loop started (interval: ' + clickMs + 'ms, enabled: ' + _autoAcceptEnabled + ', chat commands: ' + CHAT_ACCEPT_COMMANDS.length + ')');
 }
 
 // =============================================================
@@ -1250,12 +1349,15 @@ function isScriptInjected() {
 // EXTENSION ACTIVATION
 // =============================================================
 function activate(context) {
-    console.log('[AG Auto] Extension đang khởi động (v6.9.0)...');
+    console.log('[AG Auto] Extension đang khởi động (v8.0.0)...');
     _extensionContext = context;
 
     // Restore persisted click stats
     _clickStats = context.globalState.get('clickStats', {});
     _totalClicks = context.globalState.get('totalClicks', 0);
+    // Restore persisted click log
+    const storedLog = context.globalState.get('clickLog', []);
+    if (storedLog && storedLog.length > 0) _clickLog = storedLog;
 
     // Background "Keep Waiting" dialog clicker (Win32 native dialog)
     if (process.platform === 'win32') {
@@ -1333,50 +1435,51 @@ if ($global:clicked) { Write-Output 'CLICKED' }
         const currentVersion = context.extension?.packageJSON?.version || '0';
         const lastVersion = context.globalState.get('ag-injected-version', '0');
         const versionChanged = currentVersion !== lastVersion;
-        const shouldInject = needsInject || versionChanged;
 
-        if (shouldInject) {
-            const reason = needsInject ? 'Script not found' : `Version changed (${lastVersion} → ${currentVersion})`;
-            console.log(`[AG Auto] ${reason} — injecting...`);
+        // ONLY inject + reload when actually needed (prevents infinite reload loop)
+        if (needsInject || versionChanged) {
             try {
                 installScript(context);
                 context.globalState.update('ag-injected-version', currentVersion);
-                console.log('[AG Auto] ✅ Injected! Auto-reload in 1s...');
-                vscode.window.showInformationMessage('[AG Auto] ✅ Script injected! Reloading...');
+
+                const reason = needsInject ? 'Script not found in workbench' : `Version ${lastVersion} → ${currentVersion}`;
+                console.log(`[AG Auto] ${reason} — clearing V8 cache and reloading...`);
+                clearV8CodeCache();
+
+                // Update checksums BEFORE reload to avoid double-reload
+                updateProductChecksums();
+
                 setTimeout(() => {
                     vscode.commands.executeCommand('workbench.action.reloadWindow');
                 }, 1000);
-                // Don't return — let commands register below before reload
             } catch (e) {
                 console.error('[AG Auto] Inject error:', e.message);
             }
-        }
+        } else {
+            console.log('[AG Auto] ✅ Script already injected and version current, skipping inject');
 
-        // Always update checksums to suppress "corrupt installation" warning
-        const checksumsUpdated = updateProductChecksums();
-        if (checksumsUpdated && !shouldInject) {
-            // Checksums vừa update → reload để integrity check pass ở lần boot tiếp
-            // Dùng flag để tránh reload loop
-            const reloadKey = 'ag-checksum-reload-done';
-            const alreadyReloaded = context.globalState.get(reloadKey, false);
-            if (!alreadyReloaded) {
-                context.globalState.update(reloadKey, true);
-                console.log('[AG Auto] Checksums updated, reloading to apply...');
-                vscode.window.showInformationMessage('[AG Auto] Đã cập nhật checksums. Reloading...');
-                setTimeout(() => {
-                    vscode.commands.executeCommand('workbench.action.reloadWindow');
-                }, 1500);
-            } else {
-                // Reset flag cho lần update tiếp theo
-                context.globalState.update(reloadKey, false);
+            // Only update autoScript.js file (for fetch+eval loader) without touching workbench files
+            try {
+                const wbPath = getWorkbenchPath();
+                if (wbPath) {
+                    const scriptContent = buildScriptContent(context);
+                    const destPath = path.join(path.dirname(wbPath), 'ag-auto-script.js');
+                    writeFileElevated(destPath, scriptContent);
+                    console.log('[AG Auto] ✅ ag-auto-script.js updated (fetch+eval will load fresh)');
+                }
+            } catch (e) {
+                console.error('[AG Auto] Error updating ag-auto-script.js:', e.message);
             }
-        } else if (!checksumsUpdated) {
-            // Checksums đã đúng → reset flag
-            context.globalState.update('ag-checksum-reload-done', false);
+
+            // Update checksums if needed (but DON'T reload — the loader handles fresh script)
+            const checksumsUpdated = updateProductChecksums();
+            if (checksumsUpdated) {
+                console.log('[AG Auto] Checksums updated (no reload needed — fetch+eval handles it)');
+            }
         }
 
         // SECOND RUN (after reload): workbench.js has our injected code running
-        console.log('[AG Auto] ✅ Script already injected, starting services...');
+        console.log('[AG Auto] ✅ Script ready, starting services...');
 
         // 1. HTTP server for IPC (injected script polls this for ON/OFF)
         startHttpServer();

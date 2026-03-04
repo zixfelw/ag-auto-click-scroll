@@ -48,6 +48,8 @@
     var CLICK_INTERVAL_MS = /*{{CLICK_INTERVAL_MS}}*/1000;
     var SCROLL_INTERVAL_MS = /*{{SCROLL_INTERVAL_MS}}*/500;
     var CLICK_PATTERNS = /*{{CLICK_PATTERNS}}*/["Allow", "Always Allow", "Run", "Keep Waiting", "Accept all"];
+    // Accept is handled SEPARATELY (chat-only) — never in CLICK_PATTERNS
+    window._agAcceptChatOnly = false;
 
     // Live ON/OFF flag — exposed on window for all scopes + DevTools access
     window._agAutoEnabled = /*{{ENABLED}}*/true;
@@ -87,7 +89,11 @@
                         window._agAutoEnabled = cfg.enabled;
                     }
                     if (typeof cfg.scrollEnabled === 'boolean') window._agScrollEnabled = cfg.scrollEnabled;
-                    if (cfg.clickPatterns && Array.isArray(cfg.clickPatterns)) CLICK_PATTERNS = cfg.clickPatterns;
+                    if (cfg.clickPatterns && Array.isArray(cfg.clickPatterns)) {
+                        // Server already filters out 'Accept' from patterns
+                        CLICK_PATTERNS = cfg.clickPatterns.filter(function (p) { return p !== 'Accept'; });
+                    }
+                    if (typeof cfg.acceptInChatOnly === 'boolean') window._agAcceptChatOnly = cfg.acceptInChatOnly;
                     if (cfg.pauseScrollMs) PAUSE_SCROLL_MS = cfg.pauseScrollMs;
                     if (cfg.scrollIntervalMs) SCROLL_INTERVAL_MS = cfg.scrollIntervalMs;
                     if (cfg.clickIntervalMs) CLICK_INTERVAL_MS = cfg.clickIntervalMs;
@@ -176,14 +182,27 @@
             }
             if (skipEditor) continue;
 
-            // Skip buttons inside diff/merge editor containers
-            if (b.closest && (b.closest('.monaco-diff-editor') || b.closest('.merge-editor-view') || b.closest('.inline-merge-region') || b.closest('.merged-editor'))) continue;
+            // Skip buttons inside diff/merge editor containers + view-zones (inline widgets)
+            if (b.closest && (
+                b.closest('.monaco-diff-editor') || b.closest('.merge-editor-view') ||
+                b.closest('.inline-merge-region') || b.closest('.merged-editor') ||
+                b.closest('.view-zones') || b.closest('.view-lines') ||
+                b.closest('[id*="workbench.parts.editor"]')
+            )) continue;
+
+            // Skip diff hunk buttons (inline accept/reject in editor) — NEVER auto-click these
+            if (b.classList && (b.classList.contains('diff-hunk-button') || b.classList.contains('accept') || b.classList.contains('revert'))) {
+                // Only skip if also inside editor area (has 'editor' anywhere in ancestor classes/ids)
+                var editorAncestor = b.closest && b.closest('[class*="editor"], [id*="editor"]');
+                if (editorAncestor) continue;
+            }
 
             var matchesPattern = false;
             for (var p = 0; p < CLICK_PATTERNS.length; p++) {
-                if (text === CLICK_PATTERNS[p] || text.indexOf(CLICK_PATTERNS[p]) === 0) {
+                var pat = CLICK_PATTERNS[p];
+                if (text === pat || text.indexOf(pat) === 0) {
                     matchesPattern = true;
-                    matchedPattern = CLICK_PATTERNS[p];
+                    matchedPattern = pat;
                     break;
                 }
             }
@@ -193,13 +212,62 @@
                 targetBtn = b;
                 break;
             }
+
             if (isApprovalButton(b)) {
                 targetBtn = b;
                 break;
             }
         }
 
+        // --- SEPARATE Accept handling (chat-only, never via CLICK_PATTERNS) ---
+
+        if (!targetBtn && window._agAcceptChatOnly) {
+            for (var ai = 0; ai < clickables.length; ai++) {
+                var ab = clickables[ai];
+                if (ab.offsetParent === null) continue;
+                if (_clicked.has(ab)) continue;
+                var aText = (ab.innerText || ab.textContent || '').trim();
+
+                // Must start with "Accept"
+                if (aText.indexOf('Accept') !== 0) continue;
+
+                // Block known editor/bulk accept patterns (case-insensitive)
+                if (/^Accept\s+(all|changes|incoming|current|both|combination)/i.test(aText)) continue;
+
+                // BLOCK: skip if inside editor area
+                if (ab.closest && (
+                    ab.closest('.editor-scrollable') ||
+                    ab.closest('.monaco-diff-editor') ||
+                    ab.closest('.view-zones') ||
+                    ab.closest('.merge-editor-view')
+                )) {
+                    console.log('[AG Auto] ⛔ Accept BLOCKED (inside editor): [' + aText.substring(0, 20) + ']');
+                    continue;
+                }
+
+                // Skip diff hunk buttons by CSS class
+                if (ab.classList && (ab.classList.contains('diff-hunk-button') || ab.classList.contains('revert'))) {
+                    console.log('[AG Auto] ⛔ Accept BLOCKED (diff-hunk class): [' + aText.substring(0, 20) + ']');
+                    continue;
+                }
+
+                // PASSED all checks → click it
+                targetBtn = ab;
+                matchedPattern = 'Accept';
+                console.log('[AG Auto] ✅ Accept clicked in chat: [' + aText.substring(0, 25) + ']');
+                break;
+            }
+        }
+
         if (targetBtn) {
+            // Log click before executing
+            try {
+                var _lx = new XMLHttpRequest();
+                _lx.open('POST', 'http://127.0.0.1:' + AG_HTTP_PORT + '/api/click-log', true);
+                _lx.setRequestHeader('Content-Type', 'application/json');
+                _lx.timeout = 3000;
+                _lx.send(JSON.stringify({ button: targetBtn.innerText.trim().substring(0, 100), pattern: matchedPattern }));
+            } catch (_e) {}
             console.log("[AG Auto] 🎯 Click: [" + targetBtn.innerText.trim() + "]");
             _clicked.add(targetBtn);
             targetBtn.click();
