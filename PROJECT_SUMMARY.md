@@ -320,7 +320,7 @@ Các biến này được update ngay khi user toggle (instant) hoặc save sett
 
 ### Token Open VSX
 ```
-ovsxat_e84f6808-554f-4984-b805-1f7520b2dce6
+<YOUR_OVSX_TOKEN>  # Lưu token ở nơi an toàn, KHÔNG commit vào repo
 ```
 
 ### Commands
@@ -332,7 +332,7 @@ npx -y @vscode/vsce package --allow-missing-repository --skip-license
 git add -A; git commit -m "message"; git push
 
 # Publish Open VSX (SAU KHI user cho phép)
-npx -y ovsx publish -p ovsxat_e84f6808-554f-4984-b805-1f7520b2dce6
+npx -y ovsx publish -p <YOUR_OVSX_TOKEN>
 ```
 
 ### ⚠️ Quy tắc publish:
