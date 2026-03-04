@@ -1158,7 +1158,9 @@ let _totalClicks = 0;
 let _resetStatsRequested = false;
 let _extensionContext = null;
 let _httpServer = null;
-const AG_HTTP_PORT = 48787;
+const AG_HTTP_PORT_START = 48787;
+const AG_HTTP_PORT_END = 48850;
+let _actualPort = 0; // The port that was actually bound
 
 function startHttpServer() {
     if (_httpServer) return;
@@ -1276,16 +1278,44 @@ function startHttpServer() {
             }
             res.end(JSON.stringify(response));
         });
-        _httpServer.listen(AG_HTTP_PORT, '127.0.0.1', () => {
-            console.log('[AG Auto] ✅ HTTP server started on port ' + AG_HTTP_PORT);
-        });
-        _httpServer.on('error', (e) => {
-            console.log('[AG Auto] ⚠️ HTTP server error (port ' + AG_HTTP_PORT + '):', e.message);
-            // Try alternate port
-            _httpServer.listen(AG_HTTP_PORT + 1, '127.0.0.1', () => {
-                console.log('[AG Auto] ✅ HTTP server started on port ' + (AG_HTTP_PORT + 1));
+        // Dynamic port: try range 48787-48850 until one is available
+        function tryListenPort(port) {
+            if (port > AG_HTTP_PORT_END) {
+                console.log('[AG Auto] ❌ No available port in range ' + AG_HTTP_PORT_START + '-' + AG_HTTP_PORT_END);
+                return;
+            }
+            _httpServer.removeAllListeners('error');
+            _httpServer.once('error', (e) => {
+                if (e.code === 'EADDRINUSE') {
+                    console.log('[AG Auto] Port ' + port + ' busy, trying ' + (port + 1) + '...');
+                    tryListenPort(port + 1);
+                } else {
+                    console.log('[AG Auto] ⚠️ HTTP server error:', e.message);
+                }
             });
-        });
+            _httpServer.listen(port, '127.0.0.1', () => {
+                _actualPort = port;
+                console.log('[AG Auto] ✅ HTTP server started on port ' + port);
+                // Write port file so autoScript can discover our port
+                try {
+                    const wbPath = getWorkbenchPath();
+                    if (wbPath) {
+                        const portFile = path.join(path.dirname(wbPath), 'ag-auto-port-' + process.pid + '.txt');
+                        fs.writeFileSync(portFile, String(port), 'utf8');
+                        // Also write a shared port-list file (all active ports)
+                        const listFile = path.join(path.dirname(wbPath), 'ag-auto-ports.json');
+                        let portList = [];
+                        try { portList = JSON.parse(fs.readFileSync(listFile, 'utf8')); } catch (_e) { }
+                        portList = portList.filter(function (e) { return e.pid !== process.pid; });
+                        portList.push({ pid: process.pid, port: port, time: Date.now() });
+                        fs.writeFileSync(listFile, JSON.stringify(portList), 'utf8');
+                    }
+                } catch (pe) {
+                    console.log('[AG Auto] Could not write port file:', pe.message);
+                }
+            });
+        }
+        tryListenPort(AG_HTTP_PORT_START);
     } catch (e) {
         console.log('[AG Auto] HTTP server failed:', e.message);
     }
@@ -1349,7 +1379,7 @@ function isScriptInjected() {
 // EXTENSION ACTIVATION
 // =============================================================
 function activate(context) {
-    console.log('[AG Auto] Extension đang khởi động (v8.0.0)...');
+    console.log('[AG Auto] Extension đang khởi động (v8.2.0)...');
     _extensionContext = context;
 
     // Restore persisted click stats
@@ -1551,6 +1581,21 @@ function deactivate() {
     if (statusBarItem) {
         statusBarItem.dispose();
     }
+    // Cleanup port file
+    try {
+        const wbPath = getWorkbenchPath();
+        if (wbPath) {
+            const portFile = path.join(path.dirname(wbPath), 'ag-auto-port-' + process.pid + '.txt');
+            if (fs.existsSync(portFile)) fs.unlinkSync(portFile);
+            // Remove our entry from ports list
+            const listFile = path.join(path.dirname(wbPath), 'ag-auto-ports.json');
+            try {
+                let portList = JSON.parse(fs.readFileSync(listFile, 'utf8'));
+                portList = portList.filter(e => e.pid !== process.pid);
+                fs.writeFileSync(listFile, JSON.stringify(portList), 'utf8');
+            } catch (_e) { }
+        }
+    } catch (_e) { }
 }
 
 module.exports = { activate, deactivate };

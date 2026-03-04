@@ -55,60 +55,129 @@
     window._agAutoEnabled = /*{{ENABLED}}*/true;
     window._agScrollEnabled = true; // separate scroll toggle
 
-    // --- ON/OFF polling via HTTP server (Extension Host runs on port 48787) ---
-    var AG_HTTP_PORT = 48787;
+    // --- ON/OFF polling via HTTP server (dynamic port discovery) ---
+    var AG_HTTP_PORT_START = 48787;
+    var AG_HTTP_PORT_END = 48850;
+    var AG_HTTP_PORT = 0; // Will be discovered dynamically
     var _agPollCount = 0;
     var _agPollErrors = 0;
+    var _agPortScanning = false;
     // Track ONLY this session's clicks (delta since last send)
     var _agSessionStats = {};
     var _agSessionTotal = 0;
+
+    // --- Port Discovery: scan range to find our server ---
+    function _agDiscoverPort(callback) {
+        if (_agPortScanning) return;
+        _agPortScanning = true;
+        var found = false;
+        var pending = 0;
+        var startPort = AG_HTTP_PORT_START;
+        // Try ports in batches of 8 to avoid too many simultaneous XHRs
+        function tryBatch(from) {
+            if (from > AG_HTTP_PORT_END || found) {
+                if (!found) {
+                    _agPortScanning = false;
+                    console.log('[AG Auto] Port scan: no server found in range ' + AG_HTTP_PORT_START + '-' + AG_HTTP_PORT_END);
+                }
+                return;
+            }
+            var batchEnd = Math.min(from + 7, AG_HTTP_PORT_END);
+            pending = 0;
+            for (var p = from; p <= batchEnd; p++) {
+                (function (port) {
+                    pending++;
+                    var xhr = new XMLHttpRequest();
+                    xhr.open('GET', 'http://127.0.0.1:' + port + '/ag-status?t=' + Date.now(), true);
+                    xhr.timeout = 800;
+                    xhr.onload = function () {
+                        if (found) return;
+                        if (xhr.status === 200) {
+                            try {
+                                var cfg = JSON.parse(xhr.responseText);
+                                if (typeof cfg.enabled === 'boolean') {
+                                    found = true;
+                                    AG_HTTP_PORT = port;
+                                    _agPortScanning = false;
+                                    console.log('[AG Auto] ✅ Discovered server on port ' + port);
+                                    if (callback) callback(port, cfg);
+                                }
+                            } catch (_e) { }
+                        }
+                        pending--;
+                        if (pending <= 0 && !found) tryBatch(batchEnd + 1);
+                    };
+                    xhr.onerror = function () { pending--; if (pending <= 0 && !found) tryBatch(batchEnd + 1); };
+                    xhr.ontimeout = function () { pending--; if (pending <= 0 && !found) tryBatch(batchEnd + 1); };
+                    xhr.send();
+                })(p);
+            }
+        }
+        tryBatch(startPort);
+    }
+
+    function _agApplyConfig(cfg) {
+        if (typeof cfg.enabled === 'boolean') {
+            if (window._agAutoEnabled !== cfg.enabled) {
+                console.log('[AG Auto] ' + (cfg.enabled ? '✅ BẬT' : '❌ TẮT') + ' (live toggle via HTTP)');
+            }
+            window._agAutoEnabled = cfg.enabled;
+        }
+        if (typeof cfg.scrollEnabled === 'boolean') window._agScrollEnabled = cfg.scrollEnabled;
+        if (cfg.clickPatterns && Array.isArray(cfg.clickPatterns)) {
+            CLICK_PATTERNS = cfg.clickPatterns.filter(function (p) { return p !== 'Accept'; });
+        }
+        if (typeof cfg.acceptInChatOnly === 'boolean') window._agAcceptChatOnly = cfg.acceptInChatOnly;
+        if (cfg.pauseScrollMs) PAUSE_SCROLL_MS = cfg.pauseScrollMs;
+        if (cfg.scrollIntervalMs) SCROLL_INTERVAL_MS = cfg.scrollIntervalMs;
+        if (cfg.clickIntervalMs) CLICK_INTERVAL_MS = cfg.clickIntervalMs;
+        if (cfg.clickStats) window._agClickStats = cfg.clickStats;
+        if (typeof cfg.totalClicks === 'number') window._agTotalClicks = cfg.totalClicks;
+        if (cfg.resetStats) {
+            window._agClickStats = {};
+            window._agTotalClicks = 0;
+            _agSessionStats = {};
+            _agSessionTotal = 0;
+            console.log('[AG Auto] 🔄 Stats reset by user');
+        }
+    }
+
+    // Initial port discovery
+    _agDiscoverPort(function (port, cfg) {
+        _agApplyConfig(cfg);
+        _agPollErrors = 0;
+    });
+
     var _agConfigReload = setInterval(function () {
         _agPollCount++;
-        // Stop polling after too many consecutive errors (e.g. remote/SSH context)
-        if (_agPollErrors > 5) return;
+        // If port not discovered yet, re-scan every 10 polls
+        if (AG_HTTP_PORT === 0) {
+            if (_agPollCount % 5 === 0) _agDiscoverPort(function (port, cfg) { _agApplyConfig(cfg); _agPollErrors = 0; });
+            return;
+        }
+        // If too many errors, try to re-discover port (server may have restarted on new port)
+        if (_agPollErrors > 3) {
+            AG_HTTP_PORT = 0;
+            _agPollErrors = 0;
+            _agDiscoverPort(function (port, cfg) { _agApplyConfig(cfg); });
+            return;
+        }
         try {
             var xhr = new XMLHttpRequest();
-            // Send ONLY session delta stats so server can ADD them to persisted totals
             var statsParam = '';
             if (_agSessionTotal > 0) {
                 statsParam = '&total=' + _agSessionTotal + '&stats=' + encodeURIComponent(JSON.stringify(_agSessionStats));
-                // Reset delta after sending — server will accumulate
                 _agSessionStats = {};
                 _agSessionTotal = 0;
             }
-            xhr.open('GET', 'http://127.0.0.1:' + AG_HTTP_PORT + '/ag-status?t=' + Date.now() + statsParam, true); // ASYNC — won't block UI
-            xhr.timeout = 1500; // 1.5s timeout to prevent hanging
+            xhr.open('GET', 'http://127.0.0.1:' + AG_HTTP_PORT + '/ag-status?t=' + Date.now() + statsParam, true);
+            xhr.timeout = 1500;
             xhr.onload = function () {
                 if (xhr.status === 200) {
-                    _agPollErrors = 0; // reset error counter on success
+                    _agPollErrors = 0;
                     var cfg = JSON.parse(xhr.responseText);
-                    if (typeof cfg.enabled === 'boolean') {
-                        if (window._agAutoEnabled !== cfg.enabled) {
-                            console.log('[AG Auto] ' + (cfg.enabled ? '✅ BẬT' : '❌ TẮT') + ' (live toggle via HTTP)');
-                        }
-                        window._agAutoEnabled = cfg.enabled;
-                    }
-                    if (typeof cfg.scrollEnabled === 'boolean') window._agScrollEnabled = cfg.scrollEnabled;
-                    if (cfg.clickPatterns && Array.isArray(cfg.clickPatterns)) {
-                        // Server already filters out 'Accept' from patterns
-                        CLICK_PATTERNS = cfg.clickPatterns.filter(function (p) { return p !== 'Accept'; });
-                    }
-                    if (typeof cfg.acceptInChatOnly === 'boolean') window._agAcceptChatOnly = cfg.acceptInChatOnly;
-                    if (cfg.pauseScrollMs) PAUSE_SCROLL_MS = cfg.pauseScrollMs;
-                    if (cfg.scrollIntervalMs) SCROLL_INTERVAL_MS = cfg.scrollIntervalMs;
-                    if (cfg.clickIntervalMs) CLICK_INTERVAL_MS = cfg.clickIntervalMs;
-                    // Sync cumulative totals from server for display
-                    if (cfg.clickStats) window._agClickStats = cfg.clickStats;
-                    if (typeof cfg.totalClicks === 'number') window._agTotalClicks = cfg.totalClicks;
-                    // Handle reset stats signal from extension
-                    if (cfg.resetStats) {
-                        window._agClickStats = {};
-                        window._agTotalClicks = 0;
-                        _agSessionStats = {};
-                        _agSessionTotal = 0;
-                        console.log('[AG Auto] 🔄 Stats reset by user');
-                    }
-                    if (_agPollCount <= 2) console.log('[AG Auto] HTTP Poll #' + _agPollCount + ' OK, enabled=' + window._agAutoEnabled + ', patterns=' + CLICK_PATTERNS.length);
+                    _agApplyConfig(cfg);
+                    if (_agPollCount <= 2) console.log('[AG Auto] HTTP Poll #' + _agPollCount + ' OK on port ' + AG_HTTP_PORT + ', enabled=' + window._agAutoEnabled + ', patterns=' + CLICK_PATTERNS.length);
                 }
             };
             xhr.onerror = function () { _agPollErrors++; };
@@ -267,7 +336,7 @@
                 _lx.setRequestHeader('Content-Type', 'application/json');
                 _lx.timeout = 3000;
                 _lx.send(JSON.stringify({ button: targetBtn.innerText.trim().substring(0, 100), pattern: matchedPattern }));
-            } catch (_e) {}
+            } catch (_e) { }
             console.log("[AG Auto] 🎯 Click: [" + targetBtn.innerText.trim() + "]");
             _clicked.add(targetBtn);
             targetBtn.click();
