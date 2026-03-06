@@ -352,7 +352,49 @@
     }, CLICK_INTERVAL_MS);
     window._agToolIntervals.push(autoClick);
 
-    // --- 2. THEO DÕI CUỘN TAY ---
+    // --- 2. SMART SCROLL: MutationObserver detects agent activity ---
+    var _agLastContentChange = 0; // timestamp of last DOM change in chat panel
+    var _agScrollObserver = null;
+
+    // Start observing chat panel for DOM mutations
+    function _agStartScrollObserver() {
+        if (_agScrollObserver) return;
+        function attachObserver() {
+            var chatPanel = document.querySelector('.antigravity-agent-side-panel');
+            if (!chatPanel) return false;
+            _agScrollObserver = new MutationObserver(function (mutations) {
+                // Filter: only count meaningful content changes (not just attribute flips)
+                for (var i = 0; i < mutations.length; i++) {
+                    var m = mutations[i];
+                    if (m.type === 'childList' && (m.addedNodes.length > 0 || m.removedNodes.length > 0)) {
+                        _agLastContentChange = Date.now();
+                        return;
+                    }
+                    if (m.type === 'characterData') {
+                        _agLastContentChange = Date.now();
+                        return;
+                    }
+                }
+            });
+            _agScrollObserver.observe(chatPanel, {
+                childList: true,
+                subtree: true,
+                characterData: true
+            });
+            console.log('[AG Auto] 📜 Smart scroll observer attached to chat panel');
+            return true;
+        }
+        // Try to attach immediately, retry every 2s if chat panel not ready yet
+        if (!attachObserver()) {
+            var retryCount = 0;
+            var retryTimer = setInterval(function () {
+                if (attachObserver() || ++retryCount > 30) clearInterval(retryTimer);
+            }, 2000);
+        }
+    }
+    _agStartScrollObserver();
+
+    // --- Manual scroll detection (still needed to pause during user scroll) ---
     window._agScrollListener = function (e) {
         if (!isAutoScrolling && e.isTrusted) {
             var el = e.target;
@@ -365,14 +407,17 @@
     };
     window.addEventListener('scroll', window._agScrollListener, true);
 
-    // --- 3. AUTO SCROLL ---
+    // --- 3. AUTO SCROLL (smart: only when agent is generating) ---
     var _atBottom = new WeakSet(); // track elements already at bottom
     var autoScroll = setInterval(function () {
         if (!window._agAutoEnabled) return;
         if (!window._agScrollEnabled) return;
 
         var now = Date.now();
+        // Pause if user manually scrolled recently
         if (now - lastManualScrollTime < PAUSE_SCROLL_MS) return;
+        // SMART: only scroll if content changed recently (agent is generating)
+        if (_agLastContentChange === 0 || (now - _agLastContentChange > PAUSE_SCROLL_MS)) return;
 
         var scrollables = Array.from(document.querySelectorAll('*')).filter(function (el) {
             var style = window.getComputedStyle(el);
