@@ -363,9 +363,29 @@
             var chatPanel = document.querySelector('.antigravity-agent-side-panel');
             if (!chatPanel) return false;
             _agScrollObserver = new MutationObserver(function (mutations) {
-                // Filter: only count meaningful content changes (not just attribute flips)
+                // Filter: only count meaningful content changes from AGENT output
+                // SKIP mutations inside chat input area (user typing)
                 for (var i = 0; i < mutations.length; i++) {
                     var m = mutations[i];
+                    var target = m.target;
+                    // Skip if mutation is inside an input/textarea/contenteditable (user typing)
+                    if (target) {
+                        var node = target.nodeType === 3 ? target.parentElement : target;
+                        if (node && (
+                            node.tagName === 'TEXTAREA' || node.tagName === 'INPUT' ||
+                            node.isContentEditable ||
+                            (node.closest && (
+                                node.closest('textarea') ||
+                                node.closest('[contenteditable="true"]') ||
+                                node.closest('[contenteditable="plaintext-only"]') ||
+                                node.closest('.chat-input') ||
+                                node.closest('.interactive-input-part') ||
+                                node.closest('.interactive-input') ||
+                                node.closest('.monaco-inputbox') ||
+                                node.closest('.input-editor')
+                            ))
+                        )) continue;
+                    }
                     if (m.type === 'childList' && (m.addedNodes.length > 0 || m.removedNodes.length > 0)) {
                         _agLastContentChange = Date.now();
                         return;
