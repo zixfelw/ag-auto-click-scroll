@@ -359,6 +359,7 @@
     // This avoids false triggers from Expand All, hover, UI clicks, etc.
 
     var _agWasAtBottom = new WeakMap(); // track per-element: was the element at bottom?
+    var _agJustScrolled = new WeakSet(); // elements we just scrolled programmatically
     var BOTTOM_THRESHOLD = 150; // pixels from bottom to consider "at bottom"
 
     // --- 3. AUTO SCROLL ---
@@ -393,12 +394,13 @@
                 if (wasBottom) {
                     // User was at bottom → scroll to stay at bottom
                     if (gap > 5) {
+                        _agJustScrolled.add(el); // Mark: ignore next scroll event from this element
                         el.scrollTop = el.scrollHeight;
                     }
                 }
                 // If NOT at bottom, don't scroll — user is reading
             });
-            setTimeout(function () { isAutoScrolling = false; }, 50);
+            setTimeout(function () { isAutoScrolling = false; }, 200);
         }
 
     }, SCROLL_INTERVAL_MS);
@@ -406,11 +408,17 @@
 
     // --- Track scroll position to update wasAtBottom per element ---
     window._agScrollListener = function (e) {
-        if (isAutoScrolling) return; // Ignore our own scrolls
         var el = e.target;
         if (!el || el.nodeType !== 1) return;
         // Only track scrolling inside chat panel
         if (!el.closest || !el.closest('.antigravity-agent-side-panel')) return;
+
+        // Skip scroll events caused by our programmatic scrolling
+        if (_agJustScrolled.has(el)) {
+            _agJustScrolled.delete(el);
+            return;
+        }
+        if (isAutoScrolling) return;
 
         var gap = el.scrollHeight - el.scrollTop - el.clientHeight;
         if (gap <= BOTTOM_THRESHOLD) {
