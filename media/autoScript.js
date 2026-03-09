@@ -419,7 +419,14 @@
         if (!isAutoScrolling && e.isTrusted) {
             var el = e.target;
             if (el && el.nodeType === 1) {
-                if (!el.closest('.monaco-editor') && !el.closest('.part.editor')) {
+                // Detect manual scroll inside chat panel → pause auto-scroll
+                // Only IGNORE scrolling in main code editor OUTSIDE chat panel
+                var inChatPanel = el.closest && el.closest('.antigravity-agent-side-panel');
+                if (inChatPanel) {
+                    lastManualScrollTime = Date.now();
+                }
+                // Also detect scrolling in non-editor areas outside chat
+                else if (!el.closest('.monaco-editor') && !el.closest('.part.editor')) {
                     lastManualScrollTime = Date.now();
                 }
             }
