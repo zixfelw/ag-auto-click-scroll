@@ -444,11 +444,12 @@
             var hasScrollbar = el.scrollHeight > el.clientHeight &&
                 (style.overflowY === 'auto' || style.overflowY === 'scroll');
             if (!hasScrollbar) return false;
-            // Skip code editor and text areas
-            if (el.closest('.monaco-editor') || el.closest('.part.editor')) return false;
             if (el.tagName === 'TEXTAREA') return false;
-            // ONLY scroll inside the Antigravity chat panel — skip history, sidebar, everything else
-            if (!el.closest('.antigravity-agent-side-panel')) return false;
+            // Check if inside chat panel
+            var inChatPanel = el.closest('.antigravity-agent-side-panel');
+            if (!inChatPanel) return false; // Only scroll chat panel content
+            // Inside chat panel → scroll EVERYTHING (including nested code blocks, diff views, file changes)
+            // Do NOT skip monaco-editor here — chat panel uses monaco for code preview
             return true;
         });
 
