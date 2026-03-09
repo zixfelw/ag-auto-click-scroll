@@ -352,99 +352,19 @@
     }, CLICK_INTERVAL_MS);
     window._agToolIntervals.push(autoClick);
 
-    // --- 2. SMART SCROLL: MutationObserver detects agent activity ---
-    var _agLastContentChange = 0; // timestamp of last DOM change in chat panel
-    var _agScrollObserver = null;
+    // --- 2. SMART SCROLL: Stick-to-bottom (like Discord/Slack) ---
+    // Logic: If user was at bottom → keep scrolling as content arrives
+    //        If user scrolled up → STOP scrolling, let them read
+    //        If user scrolls back to bottom → resume scrolling
+    // This avoids false triggers from Expand All, hover, UI clicks, etc.
 
-    // Start observing chat panel for DOM mutations
-    function _agStartScrollObserver() {
-        if (_agScrollObserver) return;
-        function attachObserver() {
-            var chatPanel = document.querySelector('.antigravity-agent-side-panel');
-            if (!chatPanel) return false;
-            _agScrollObserver = new MutationObserver(function (mutations) {
-                // Filter: only count meaningful content changes from AGENT output
-                // SKIP mutations inside chat input area (user typing)
-                for (var i = 0; i < mutations.length; i++) {
-                    var m = mutations[i];
-                    var target = m.target;
-                    // Skip if mutation is inside an input/textarea/contenteditable (user typing)
-                    if (target) {
-                        var node = target.nodeType === 3 ? target.parentElement : target;
-                        if (node && (
-                            node.tagName === 'TEXTAREA' || node.tagName === 'INPUT' ||
-                            node.isContentEditable ||
-                            (node.closest && (
-                                node.closest('textarea') ||
-                                node.closest('[contenteditable="true"]') ||
-                                node.closest('[contenteditable="plaintext-only"]') ||
-                                node.closest('.chat-input') ||
-                                node.closest('.interactive-input-part') ||
-                                node.closest('.interactive-input') ||
-                                node.closest('.monaco-inputbox') ||
-                                node.closest('.input-editor')
-                            ))
-                        )) continue;
-                    }
-                    if (m.type === 'childList' && (m.addedNodes.length > 0 || m.removedNodes.length > 0)) {
-                        _agLastContentChange = Date.now();
-                        return;
-                    }
-                    if (m.type === 'characterData') {
-                        _agLastContentChange = Date.now();
-                        return;
-                    }
-                }
-            });
-            _agScrollObserver.observe(chatPanel, {
-                childList: true,
-                subtree: true,
-                characterData: true
-            });
-            console.log('[AG Auto] 📜 Smart scroll observer attached to chat panel');
-            return true;
-        }
-        // Try to attach immediately, retry every 2s if chat panel not ready yet
-        if (!attachObserver()) {
-            var retryCount = 0;
-            var retryTimer = setInterval(function () {
-                if (attachObserver() || ++retryCount > 30) clearInterval(retryTimer);
-            }, 2000);
-        }
-    }
-    _agStartScrollObserver();
+    var _agWasAtBottom = new WeakMap(); // track per-element: was the element at bottom?
+    var BOTTOM_THRESHOLD = 150; // pixels from bottom to consider "at bottom"
 
-    // --- Manual scroll detection (still needed to pause during user scroll) ---
-    window._agScrollListener = function (e) {
-        if (!isAutoScrolling && e.isTrusted) {
-            var el = e.target;
-            if (el && el.nodeType === 1) {
-                // Detect manual scroll inside chat panel → pause auto-scroll
-                // Only IGNORE scrolling in main code editor OUTSIDE chat panel
-                var inChatPanel = el.closest && el.closest('.antigravity-agent-side-panel');
-                if (inChatPanel) {
-                    lastManualScrollTime = Date.now();
-                }
-                // Also detect scrolling in non-editor areas outside chat
-                else if (!el.closest('.monaco-editor') && !el.closest('.part.editor')) {
-                    lastManualScrollTime = Date.now();
-                }
-            }
-        }
-    };
-    window.addEventListener('scroll', window._agScrollListener, true);
-
-    // --- 3. AUTO SCROLL (smart: only when agent is generating) ---
-    var _atBottom = new WeakSet(); // track elements already at bottom
+    // --- 3. AUTO SCROLL ---
     var autoScroll = setInterval(function () {
         if (!window._agAutoEnabled) return;
         if (!window._agScrollEnabled) return;
-
-        var now = Date.now();
-        // Pause if user manually scrolled recently
-        if (now - lastManualScrollTime < PAUSE_SCROLL_MS) return;
-        // SMART: only scroll if content changed recently (agent is generating)
-        if (_agLastContentChange === 0 || (now - _agLastContentChange > PAUSE_SCROLL_MS)) return;
 
         var scrollables = Array.from(document.querySelectorAll('*')).filter(function (el) {
             var style = window.getComputedStyle(el);
@@ -452,11 +372,9 @@
                 (style.overflowY === 'auto' || style.overflowY === 'scroll');
             if (!hasScrollbar) return false;
             if (el.tagName === 'TEXTAREA') return false;
-            // Check if inside chat panel
+            // Only scroll inside chat panel
             var inChatPanel = el.closest('.antigravity-agent-side-panel');
-            if (!inChatPanel) return false; // Only scroll chat panel content
-            // Inside chat panel → scroll EVERYTHING (including nested code blocks, diff views, file changes)
-            // Do NOT skip monaco-editor here — chat panel uses monaco for code preview
+            if (!inChatPanel) return false;
             return true;
         });
 
@@ -464,20 +382,46 @@
             isAutoScrolling = true;
             scrollables.forEach(function (el) {
                 var gap = el.scrollHeight - el.scrollTop - el.clientHeight;
-                if (gap > 5) {
-                    // Not at bottom yet — scroll down and clear "at bottom" flag
-                    _atBottom.delete(el);
-                    el.scrollTop = el.scrollHeight;
-                } else {
-                    // Already at bottom — mark it, do nothing (prevents jitter)
-                    _atBottom.add(el);
+                var wasBottom = _agWasAtBottom.get(el);
+
+                // First time seeing this element — check if currently at bottom
+                if (wasBottom === undefined) {
+                    wasBottom = gap <= BOTTOM_THRESHOLD;
+                    _agWasAtBottom.set(el, wasBottom);
                 }
+
+                if (wasBottom) {
+                    // User was at bottom → scroll to stay at bottom
+                    if (gap > 5) {
+                        el.scrollTop = el.scrollHeight;
+                    }
+                }
+                // If NOT at bottom, don't scroll — user is reading
             });
             setTimeout(function () { isAutoScrolling = false; }, 50);
         }
 
     }, SCROLL_INTERVAL_MS);
     window._agToolIntervals.push(autoScroll);
+
+    // --- Track scroll position to update wasAtBottom per element ---
+    window._agScrollListener = function (e) {
+        if (isAutoScrolling) return; // Ignore our own scrolls
+        var el = e.target;
+        if (!el || el.nodeType !== 1) return;
+        // Only track scrolling inside chat panel
+        if (!el.closest || !el.closest('.antigravity-agent-side-panel')) return;
+
+        var gap = el.scrollHeight - el.scrollTop - el.clientHeight;
+        if (gap <= BOTTOM_THRESHOLD) {
+            // User scrolled back to bottom → resume auto-scroll
+            _agWasAtBottom.set(el, true);
+        } else {
+            // User scrolled up → stop auto-scroll for this element
+            _agWasAtBottom.set(el, false);
+        }
+    };
+    window.addEventListener('scroll', window._agScrollListener, true);
 
     console.log("[AG Auto] 🚀 v4.12 | Live toggle via window._agAutoEnabled | Patterns:", JSON.stringify(CLICK_PATTERNS));
 })();
